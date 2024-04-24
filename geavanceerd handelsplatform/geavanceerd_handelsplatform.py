@@ -4,9 +4,8 @@ import time
 import yfinance as yf
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
 from keras import Sequential
-from keras import Dense, LSTM
+from keras import Dense
 from alpha_vantage.timeseries import TimeSeries
 
 # Vul hier je eigen API-sleutel in
@@ -21,10 +20,18 @@ def fetch_data(symbol):
     return data
 
 # Functie om technische indicatoren te berekenen
+# Functie om de MACD-indicator te berekenen
+def calculate_macd(close_price, window_short=12, window_long=26, window_signal=9):
+    ema_short = close_price.ewm(span=window_short, min_periods=window_short, adjust=False).mean()
+    ema_long = close_price.ewm(span=window_long, min_periods=window_long, adjust=False).mean()
+    macd = ema_short - ema_long
+    signal_line = macd.ewm(span=window_signal, min_periods=window_signal, adjust=False).mean()
+    return macd, signal_line
 def calculate_technical_indicators(data):
     data['SMA_50'] = data['4. close'].rolling(window=50).mean()
     data['SMA_200'] = data['4. close'].rolling(window=200).mean()
     data['RSI'] = calculate_rsi(data['4. close'])
+    data['MACD'], data['Signal_Line'] = calculate_macd(data['4. close'])  # Voeg MACD-berekening toe
     return data
 
 # Functie om de RSI-indicator te berekenen
@@ -37,9 +44,10 @@ def calculate_rsi(close_price, window=14):
     return rsi
 
 # Functie om de gegevens voor het model voor te bereiden
+
 def prepare_data(data):
     data = data.dropna()
-    X = data[['SMA_50', 'SMA_200', 'RSI']].values
+    X = data[['SMA_50', 'SMA_200', 'RSI', 'MACD', 'Signal_Line']].values  # Voeg MACD toe aan de features
     scaler = MinMaxScaler(feature_range=(0, 1))
     X_scaled = scaler.fit_transform(X)
     return X_scaled
@@ -80,7 +88,8 @@ def auto_trade(symbol):
     # Split de gegevens in trainings- en testsets
     X = prepare_data(data)
     y = (data['4. close'].shift(-1) > data['4. close']).astype(int).values[:-1]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=True)
+
     
     # Train het model
     model = train_model(X_train, y_train)
@@ -91,8 +100,9 @@ def auto_trade(symbol):
     # Voer handel uit op basis van signalen
     execute_trade(symbol, signals)
 
-# Start geautomatiseerd handelen voor het opgegeven aandeel
-symbol = 'AAPL'  # Voorbeeld ticker (Apple)
+# Start geautomatiseerd handelen voor elk opgegeven aandeel
+symbols = ['STOXX50', 'NDX', 'XAUUSD', 'BTCUSD', 'ETHUSD','EURUSD']
 while True:
-    auto_trade(symbol)
+    for symbol in symbols:
+        auto_trade(symbol)
     time.sleep(86400)  # Wacht 1 dag tussen elke iteratie
