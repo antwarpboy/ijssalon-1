@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import time
 import yfinance as yf
+import requests
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from keras import Sequential
@@ -10,6 +11,26 @@ from alpha_vantage.timeseries import TimeSeries
 
 # Vul hier je eigen API-sleutel in
 api_key = 'YOUR_API_KEY'
+
+# Definieer de URL's voor de verschillende symbolen
+urls = [
+    "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=STOXX50&interval=5min&apikey=" + api_key,
+    "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=NDX&interval=5min&apikey=" + api_key,
+    "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=XAUUSD&interval=5min&apikey=" + api_key,
+    "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=BTCUSD&interval=5min&apikey=" + api_key,
+    "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=ETHUSD&interval=5min&apikey=" + api_key,
+    "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=EURUSD&interval=5min&apikey=" + api_key
+]
+
+# Maak een HTTP-verzoek voor elke URL en verwerk de respons
+for url in urls:
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()  # Converteer de respons naar JSON-formaat
+        # Verwerk de gegevens zoals nodig
+        print(data)  # Bijvoorbeeld: print de gegevens naar de console
+    else:
+        print("Fout bij het ophalen van gegevens voor:", url)
 
 # Maak een TimeSeries object voor aandelengegevens
 timeseries = TimeSeries(key=api_key, output_format='pandas')
