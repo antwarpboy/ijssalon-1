@@ -5,8 +5,8 @@ import yfinance as yf
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
-from keras.models import Sequential
-from keras.layers import Dense, LSTM
+from keras import Sequential
+from keras import Dense, LSTM
 from alpha_vantage.timeseries import TimeSeries
 
 # Vul hier je eigen API-sleutel in
