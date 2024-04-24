@@ -8,6 +8,10 @@ from sklearn.model_selection import train_test_split
 from keras import Sequential
 from keras import Dense
 from alpha_vantage.timeseries import TimeSeries
+from flask import render_template
+from flask_socketio import SocketIO, emit
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Button
 
 # Vul hier je eigen API-sleutel in
 api_key = 'YOUR_API_KEY'
@@ -127,3 +131,47 @@ while True:
     for symbol in symbols:
         auto_trade(symbol)
     time.sleep(86400)  # Wacht 1 dag tussen elke iteratie
+
+# Aanvullende functionaliteit voor het weergeven van knoppen en balansinformatie
+def start_trading(event):
+    global trading_active
+    trading_active = True
+    print("Trading is gestart.")
+
+def stop_trading(event):
+    global trading_active
+    trading_active = False
+    print("Trading is gestopt.")
+
+def update_balance():
+    global trading_balance, available_balance, total_balance
+    trading_balance = np.random.randint(1000, 5000)
+    available_balance = np.random.randint(1000, 5000)
+    total_balance = trading_balance + available_balance
+
+# Creëer een grafiek om de balansinformatie weer te geven
+def plot_balance():
+    plt.figure(figsize=(8, 6))
+    plt.bar(['Trading Balance', 'Available Balance', 'Total Balance'], [trading_balance, available_balance, total_balance], color=['blue', 'green', 'red'])
+    plt.title('Balance Information')
+    plt.xlabel('Account Type')
+    plt.ylabel('Balance')
+    plt.show()
+
+# Creëer knoppen om het handelen te starten en te stoppen
+start_button_ax = plt.axes([0.1, 0.05, 0.2, 0.075])
+start_button = Button(start_button_ax, 'Start Trading')
+start_button.on_clicked(start_trading)
+
+stop_button_ax = plt.axes([0.7, 0.05, 0.2, 0.075])
+stop_button = Button(stop_button_ax, 'Stop Trading')
+stop_button.on_clicked(stop_trading)
+
+# Initialisatie van variabelen voor balansinformatie
+trading_balance = 0
+available_balance = 0
+total_balance = 0
+
+# Update balansinformatie en plot
+update_balance()
+plot_balance()
