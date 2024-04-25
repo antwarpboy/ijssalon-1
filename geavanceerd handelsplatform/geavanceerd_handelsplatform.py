@@ -8,8 +8,6 @@ from sklearn.model_selection import train_test_split
 from keras import Sequential
 from keras import Dense
 from alpha_vantage.timeseries import TimeSeries
-from flask import render_template
-from flask_socketio import SocketIO, emit
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
 
@@ -126,11 +124,14 @@ def auto_trade(symbol):
     execute_trade(symbol, signals)
 
 # Start geautomatiseerd handelen voor elk opgegeven aandeel
-symbols = ['STOXX50', 'NDX', 'XAUUSD', 'BTCUSD', 'ETHUSD','EURUSD']
-while True:
+symbols = ['STOXX50', 'NDX', 'XAUUSD', 'BTCUSD', 'ETHUSD', 'EURUSD']
+iterations = 10  # Aantal iteraties voordat de lus wordt gestopt
+for i in range(iterations):
     for symbol in symbols:
         auto_trade(symbol)
     time.sleep(86400)  # Wacht 1 dag tussen elke iteratie
+
+# Na de lus voor geautomatiseerd handelen, voer de volgende stappen uit
 
 # Aanvullende functionaliteit voor het weergeven van knoppen en balansinformatie
 def start_trading(event):
