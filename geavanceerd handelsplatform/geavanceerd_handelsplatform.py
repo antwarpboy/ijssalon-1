@@ -653,11 +653,7 @@ for _ in range(iterations):
     asyncio.run(auto_trade_async(symbols))
     time.sleep(86400)  # Wacht 1 dag tussen elke iteratie
 
-
-
 # Na de lus voor geautomatiseerd handelen, voer de volgende stappen uit
-
-
 # Voeg de TradingApp-klasse toe met demo-functionaliteit
 class TradingApp:
     DEMO_BALANCE = 50000  # Nep balance voor demo-modus
@@ -708,7 +704,7 @@ class TradingAppGUI:
         self.master = master
         self.trading_app = trading_app  # Voeg een attribuut toe om de TradingApp-instantie bij te houden
         master.title("Trading App")
-
+    
         # Frames voor verschillende secties van de GUI
         self.top_frame = ttk.Frame(master)
         self.top_frame.pack(pady=10)
@@ -759,6 +755,23 @@ class TradingAppGUI:
         # Knop voor het toggelen van demo-modus
         self.demo_mode_button = ttk.Button(self.middle_frame, text="Toggle Demo Mode", command=self.toggle_demo_mode)
         self.demo_mode_button.grid(row=1, column=2, pady=5)
+
+        # Knoppen voor het starten en stoppen van de automatische handel
+        self.start_autotrade_button = ttk.Button(self.middle_frame, text="Start Autotrade", command=self.start_autotrade)
+        self.start_autotrade_button.grid(row=2, column=0, pady=5)
+        self.stop_autotrade_button = ttk.Button(self.middle_frame, text="Stop Autotrade", command=self.stop_autotrade)
+        self.stop_autotrade_button.grid(row=2, column=1, pady=5)
+
+    def start_autotrade(self):
+      
+      asyncio.run(auto_trade_async(symbols))
+
+      pass
+
+    def stop_autotrade(self):
+
+
+        pass    
 
     def update_balance(self):
         self.trading_balance = np.random.randint(1000, 5000)
