@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 import time
 import requests
-import os
 import config
 import json
 import hashlib
@@ -208,9 +207,83 @@ def fetch_data(symbol, function, interval='5min', outputsize='full'):
         return None
 
 # Functie om technische indicatoren te berekenen
+def calculate_bollinger_bands(close_price, window=20, num_std=2):
+    rolling_mean = close_price.rolling(window=window).mean()
+    rolling_std = close_price.rolling(window=window).std()
+    upper_band = rolling_mean + num_std * rolling_std
+    lower_band = rolling_mean - num_std * rolling_std
+    return upper_band, lower_band
+
+def calculate_stochastic_oscillator(close_price, high_price, low_price, window=14):
+    lowest_low = low_price.rolling(window=window).min()
+    highest_high = high_price.rolling(window=window).max()
+    stochastic_oscillator = 100 * (close_price - lowest_low) / (highest_high - lowest_low)
+    return stochastic_oscillator
+class TestCalculateBollingerBands(unittest.TestCase):
+    def test_calculate_bollinger_bands(self):
+        # Voorbeeld invoerdata
+        close_price = pd.Series([10, 12, 15, 14, 16, 18, 17, 20, 22, 21])
+
+        # Bereken Bollinger Bands
+        upper_band, lower_band = calculate_bollinger_bands(close_price)
+
+        # Controleer of de resultaten geldige pandas Series zijn
+        self.assertIsInstance(upper_band, pd.Series)
+        self.assertIsInstance(lower_band, pd.Series)
+
+class TestCalculateStochasticOscillator(unittest.TestCase):
+    def test_calculate_stochastic_oscillator(self):
+        # Voorbeeld invoerdata
+        close_price = pd.Series([10, 12, 15, 14, 16, 18, 17, 20, 22, 21])
+        high_price = pd.Series([11, 13, 16, 15, 17, 19, 18, 21, 23, 22])
+        low_price = pd.Series([9, 11, 14, 13, 15, 17, 16, 19, 21, 20])
+
+        # Bereken Stochastic Oscillator
+        stochastic_oscillator = calculate_stochastic_oscillator(close_price, high_price, low_price)
+
+        # Controleer of de resultaten geldig zijn
+        self.assertIsInstance(stochastic_oscillator, pd.Series)
+
+class TestCalculateATR(unittest.TestCase):
+    def test_calculate_atr(self):
+        # Voorbeeld invoerdata
+        high_price = pd.Series([11, 13, 16, 15, 17, 19, 18, 21, 23, 22])
+        low_price = pd.Series([9, 11, 14, 13, 15, 17, 16, 19, 21, 20])
+        close_price = pd.Series([10, 12, 15, 14, 16, 18, 17, 20, 22, 21])
+
+        # Bereken Average True Range (ATR)
+        atr = calculate_atr(high_price, low_price, close_price)
+
+        # Controleer of de resultaten geldig zijn
+        self.assertIsInstance(atr, pd.Series)
+
+if __name__ == '__main__':
+    unittest.main()
+def calculate_atr(high_price, low_price, close_price, window=14):
+    high_low = high_price - low_price
+    high_close = np.abs(high_price - close_price.shift())
+    low_close = np.abs(low_price - close_price.shift())
+    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    atr = true_range.rolling(window=window).mean()
+    return atr
+
+def calculate_ema(data, window):
+    """
+    Bereken het exponentieel gewogen bewegende gemiddelde (EMA) van de gegeven data met het opgegeven venster.
+
+    Parameters:
+    - data (pandas.Series): Pandas Series met de gegevens waarvoor het EMA wordt berekend.
+    - window (int): Het venster voor het EMA-berekening.
+
+    Returns:
+    - ema (pandas.Series): Pandas Series met de EMA-waarden.
+    """
+    ema = data.ewm(span=window, min_periods=window).mean()
+    return ema
+
 def calculate_macd(close_price, window_short=12, window_long=26, window_signal=9):
     """
-    Bereken MACD (Moving Average Convergence Divergence) en signaallijn.
+    Bereken MACD (Moving Average Convergence Divergence), signaallijn en histogram.
 
     Parameters:
     - close_price (pandas.Series): Pandas Series met sluitingsprijzen van aandelen.
@@ -221,22 +294,38 @@ def calculate_macd(close_price, window_short=12, window_long=26, window_signal=9
     Returns:
     - macd (pandas.Series): Pandas Series met MACD-waarden.
     - signal_line (pandas.Series): Pandas Series met signaallijn-waarden.
+    - histogram (pandas.Series): Pandas Series met histogram-waarden.
     """
-    ema_short = close_price.ewm(span=window_short).mean()
-    ema_long = close_price.ewm(span=window_long).mean()
-    macd = ema_short - ema_long
-    signal_line = macd.ewm(span=window_signal).mean()
-    return macd, signal_line
+    # Bereken korte en lange EMA
+    ema_short = calculate_ema(close_price, window_short)
+    ema_long = calculate_ema(close_price, window_long)
+
+    # Bereken MACD-lijn
+    macd_line = ema_short - ema_long
+
+    # Bereken signaallijn
+    signal_line = calculate_ema(macd_line, window_signal)
+
+    # Bereken histogram
+    histogram = macd_line - signal_line
+
+    return macd_line, signal_line, histogram
+
+
 class TestCalculateMACD(unittest.TestCase):
     def test_calculate_macd(self):
         # Voorbeeld invoerdata
         close_price = pd.Series([10, 12, 15, 14, 16, 18, 17, 20, 22, 21])
 
-        # Verwachte uitvoerdata
-        expected_macd = pd.Series([0, 0.2, 0.6857, 0.6518, 0.9618, 1.5255, 1.2523, 2.2415, 3.3706, 3.4973])
-        expected_signal_line = pd.Series([0, 0.04, 0.2995, 0.4364, 0.6411, 0.9459, 1.0411, 1.5536, 2.2534, 2.9776])
+        # Bereken EMA's voor de invoerdata
+        ema_short = calculate_ema(close_price, 12)
+        ema_long = calculate_ema(close_price, 26)
 
-        # Bereken MACD
+        # Verwachte MACD en signaallijn
+        expected_macd = ema_short - ema_long
+        expected_signal_line = calculate_ema(expected_macd, 9)
+
+        # Bereken MACD en signaallijn met de functie
         macd, signal_line = calculate_macd(close_price)
 
         # Vergelijk de berekende MACD met de verwachte MACD
@@ -280,18 +369,28 @@ def calculate_technical_indicators(data):
     data['SMA_200'] = data['4. close'].rolling(window=200).mean()
     data['RSI'] = calculate_rsi(data['4. close'])
     data['MACD'], data['Signal_Line'] = calculate_macd(data['4. close'])
+    data['Upper_Band'], data['Lower_Band'] = calculate_bollinger_bands(data['4. close'])
+    data['Stochastic_Oscillator'] = calculate_stochastic_oscillator(data['4. close'], data['2. high'], data['3. low'])
+    data['ATR'] = calculate_atr(data['2. high'], data['3. low'], data['4. close'])
     return data
+
 class TestCalculateTechnicalIndicators(unittest.TestCase):
     def test_calculate_technical_indicators(self):
         # Voorbeeld invoerdata
         data = pd.DataFrame({
-            '4. close': [10, 12, 15, 14, 16, 18, 17, 20, 22, 21]
+            '4. close': [10, 12, 15, 14, 16, 18, 17, 20, 22, 21],
+            '2. high': [11, 13, 16, 15, 17, 19, 18, 21, 23, 22],
+            '3. low': [9, 11, 14, 13, 15, 17, 16, 19, 21, 20]
         })
 
         # Verwachte uitvoerdata
         expected_sma_50 = pd.Series([np.nan, np.nan, np.nan, np.nan, 13.8, 14.4, 15.0, 15.6, 16.2, 16.8])
         expected_sma_200 = pd.Series([np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, 16.6])
         expected_rsi = pd.Series([np.nan, np.nan, 100.0, 88.8889, 100.0, 100.0, 85.1852, 100.0, 100.0, 97.9021])
+        # Voeg verwachte waarden toe voor nieuwe indicatoren
+        expected_upper_band, expected_lower_band = calculate_bollinger_bands(data['4. close'])
+        expected_stochastic_oscillator = calculate_stochastic_oscillator(data['4. close'], data['2. high'], data['3. low'])
+        expected_atr = calculate_atr(data['2. high'], data['3. low'], data['4. close'])
 
         # Bereken technische indicatoren
         result = calculate_technical_indicators(data)
@@ -300,6 +399,11 @@ class TestCalculateTechnicalIndicators(unittest.TestCase):
         self.assertTrue(result['SMA_50'].equals(expected_sma_50))
         self.assertTrue(result['SMA_200'].equals(expected_sma_200))
         self.assertTrue(np.allclose(result['RSI'], expected_rsi, equal_nan=True))
+        # Voeg test toe voor nieuwe indicatoren
+        self.assertTrue(np.allclose(result['Upper_Band'], expected_upper_band, equal_nan=True))
+        self.assertTrue(np.allclose(result['Lower_Band'], expected_lower_band, equal_nan=True))
+        self.assertTrue(np.allclose(result['Stochastic_Oscillator'], expected_stochastic_oscillator, equal_nan=True))
+        self.assertTrue(np.allclose(result['ATR'], expected_atr, equal_nan=True))
 
 if __name__ == '__main__':
     unittest.main()
@@ -553,129 +657,8 @@ for _ in range(iterations):
 
 # Na de lus voor geautomatiseerd handelen, voer de volgende stappen uit
 
-# Aanvullende functionaliteit voor het weergeven van knoppen en balansinformatie
-def start_trading(event):
-    global trading_active
-    trading_active = True
-    print("Trading is gestart.")
-
-def stop_trading(event):
-    global trading_active
-    trading_active = False
-    print("Trading is gestopt.")
-
-def update_balance():
-    global trading_balance, available_balance, total_balance
-    trading_balance = np.random.randint(1000, 5000)
-    available_balance = np.random.randint(1000, 5000)
-    total_balance = trading_balance + available_balance
-
-# Creëer een grafiek om de balansinformatie weer te geven
-def plot_balance():
-    plt.figure(figsize=(8, 6))
-    plt.bar(['Trading Balance', 'Available Balance', 'Total Balance'], [trading_balance, available_balance, total_balance], color=['blue', 'green', 'red'])
-    plt.title('Balance Information')
-    plt.xlabel('Account Type')
-    plt.ylabel('Balance')
-    plt.show()
-
-# Creëer knoppen om het handelen te starten, te stoppen en geld terug te storten
-start_button_ax = plt.axes([0.1, 0.05, 0.2, 0.075])
-start_button = Button(start_button_ax, 'Start Trading')
-start_button.on_clicked(start_trading)
-
-stop_button_ax = plt.axes([0.4, 0.05, 0.2, 0.075])
-stop_button = Button(stop_button_ax, 'Stop Trading')
-stop_button.on_clicked(stop_trading)
-
-withdraw_button_ax = plt.axes([0.7, 0.05, 0.2, 0.075])
-withdraw_button = Button(withdraw_button_ax, 'Withdraw Funds')
-withdraw_button.on_clicked(lambda event: withdraw_funds())
-
-# Functie om geld terug te storten van de app naar de gebruiker
-def withdraw_funds():
-    # Voer hier de logica uit om geld terug te storten naar de gebruiker
-    # Dit kan het aanroepen van een externe API of het uitvoeren van een financiële transactie omvatten
-    print("Geld wordt teruggestort naar de gebruiker.")
-
-# Functie om de GUI bij te werken na het terugstorten van geld
-def update_gui_after_withdrawal():
-    # Voer hier de logica uit om de GUI bij te werken nadat geld is teruggestort
-    # Bijvoorbeeld het bijwerken van balansinformatie of het weergeven van een melding aan de gebruiker
-    print("GUI wordt bijgewerkt na het terugstorten van geld.")
-
-
-# Initialisatie van variabelen voor balansinformatie
-trading_balance = 0
-available_balance = 0
-total_balance = 0
-
-# Update balansinformatie en plot
-update_balance()
-plot_balance()
 
 # Voeg de TradingApp-klasse toe met demo-functionaliteit
-
-class TradingAppGUI:
-    def __init__(self, master):
-        self.master = master
-        master.title("Trading App")
-
-        # Frames voor verschillende secties van de GUI
-        self.top_frame = ttk.Frame(master)
-        self.top_frame.pack(pady=10)
-        self.middle_frame = ttk.Frame(master)
-        self.middle_frame.pack(pady=10)
-        self.bottom_frame = ttk.Frame(master)
-        self.bottom_frame.pack(pady=10)
-
-        # Label en invoerveld voor het invoeren van het tickersymbool
-        self.symbol_label = ttk.Label(self.top_frame, text="Enter Ticker Symbol:")
-        self.symbol_label.grid(row=0, column=0)
-        self.symbol_entry = ttk.Entry(self.top_frame, width=10)
-        self.symbol_entry.grid(row=0, column=1)
-
-        # Knop om gegevens op te halen en grafiek te plotten
-        self.plot_button = ttk.Button(self.top_frame, text="Plot", command=self.plot_data)
-        self.plot_button.grid(row=0, column=2)
-
-        # Dropdownmenu voor het selecteren van de handelsstrategie
-        self.strategy_label = ttk.Label(self.middle_frame, text="Select Trading Strategy:")
-        self.strategy_label.grid(row=0, column=0)
-        self.strategy_var = tk.StringVar()
-        self.strategy_dropdown = ttk.Combobox(self.middle_frame, textvariable=self.strategy_var, width=20)
-        self.strategy_dropdown['values'] = ('Simple Moving Average', 'RSI', 'MACD')
-        self.strategy_dropdown.grid(row=0, column=1)
-        self.strategy_dropdown.current(0)
-
-        # Canvas voor het plotten van de handelsgrafiek
-        self.fig, self.ax = plt.subplots(figsize=(8, 4))
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.bottom_frame)
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-    def plot_data(self):
-        # Haal gegevens op van Yahoo Finance
-        symbol = self.symbol_entry.get()
-        data = yf.download(symbol, start="2023-01-01", end="2024-01-01")
-
-        # Plot de sluitingsprijs
-        self.ax.clear()
-        self.ax.plot(data.index, data['Close'], label="Close Price")
-        self.ax.set_title(f"{symbol} Closing Price")
-        self.ax.set_xlabel("Date")
-        self.ax.set_ylabel("Price")
-        self.ax.legend()
-        self.canvas.draw()
-
-# Functie om het hoofdvenster van de GUI te maken en uit te voeren
-def run_trading_app():
-    root = tk.Tk()
-    trading_app_gui = TradingAppGUI(root)
-    root.mainloop()
-
-# Voer de GUI-applicatie uit wanneer het script wordt uitgevoerd
-if __name__ == "__main__":
-    run_trading_app()
 class TradingApp:
     DEMO_BALANCE = 50000  # Nep balance voor demo-modus
 
@@ -719,3 +702,114 @@ class TradingApp:
         if self._demo_mode:
             self._trading_balance = self.DEMO_BALANCE
         print("Demo mode is now", self._demo_mode)
+
+class TradingAppGUI:
+    def __init__(self, master, trading_app):
+        self.master = master
+        self.trading_app = trading_app  # Voeg een attribuut toe om de TradingApp-instantie bij te houden
+        master.title("Trading App")
+
+        # Frames voor verschillende secties van de GUI
+        self.top_frame = ttk.Frame(master)
+        self.top_frame.pack(pady=10)
+        self.middle_frame = ttk.Frame(master)
+        self.middle_frame.pack(pady=10)
+        self.bottom_frame = ttk.Frame(master)
+        self.bottom_frame.pack(pady=10)
+
+        # Label en invoerveld voor het invoeren van het tickersymbool
+        self.symbol_label = ttk.Label(self.top_frame, text="Enter Ticker Symbol:")
+        self.symbol_label.grid(row=0, column=0)
+        self.symbol_entry = ttk.Entry(self.top_frame, width=10)
+        self.symbol_entry.grid(row=0, column=1)
+
+        # Knop om gegevens op te halen en grafiek te plotten
+        self.plot_button = ttk.Button(self.top_frame, text="Plot", command=self.plot_data)
+        self.plot_button.grid(row=0, column=2)
+
+        # Dropdownmenu voor het selecteren van de handelsstrategie
+        self.strategy_label = ttk.Label(self.middle_frame, text="Select Trading Strategy:")
+        self.strategy_label.grid(row=0, column=0)
+        self.strategy_var = tk.StringVar()
+        self.strategy_dropdown = ttk.Combobox(self.middle_frame, textvariable=self.strategy_var, width=20)
+        self.strategy_dropdown['values'] = ('Simple Moving Average', 'RSI', 'MACD')
+        self.strategy_dropdown.grid(row=0, column=1)
+        self.strategy_dropdown.current(0)
+
+        # Canvas voor het plotten van de handelsgrafiek
+        self.fig, self.ax = plt.subplots(figsize=(8, 4))
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.bottom_frame)
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+        # Initialisatie van variabelen voor balansinformatie
+        self.trading_balance = 0
+        self.available_balance = 0
+        self.total_balance = 0
+
+        # Update balansinformatie en plot
+        self.update_balance()
+        self.plot_balance()
+
+        # Knoppen voor het storten en opnemen van geld
+        self.deposit_button = ttk.Button(self.middle_frame, text="Deposit Funds", command=self.deposit_funds)
+        self.deposit_button.grid(row=1, column=0, pady=5)
+        self.withdraw_button = ttk.Button(self.middle_frame, text="Withdraw Funds", command=self.withdraw_funds)
+        self.withdraw_button.grid(row=1, column=1, pady=5)
+
+        # Knop voor het toggelen van demo-modus
+        self.demo_mode_button = ttk.Button(self.middle_frame, text="Toggle Demo Mode", command=self.toggle_demo_mode)
+        self.demo_mode_button.grid(row=1, column=2, pady=5)
+
+    def update_balance(self):
+        self.trading_balance = np.random.randint(1000, 5000)
+        self.available_balance = np.random.randint(1000, 5000)
+        self.total_balance = self.trading_balance + self.available_balance
+
+    def plot_balance(self):
+        plt.figure(figsize=(8, 6))
+        plt.bar(['Trading Balance', 'Available Balance', 'Total Balance'], 
+                [self.trading_balance, self.available_balance, self.total_balance], 
+                color=['blue', 'green', 'red'])
+        plt.title('Balance Information')
+        plt.xlabel('Account Type')
+        plt.ylabel('Balance')
+        plt.show()
+
+    def plot_data(self):
+        # Haal gegevens op van Yahoo Finance
+        symbol = self.symbol_entry.get()
+        data = yf.download(symbol, start="2023-01-01", end="2024-01-01")
+
+        # Plot de sluitingsprijs
+        self.ax.clear()
+        self.ax.plot(data.index, data['Close'], label="Close Price")
+        self.ax.set_title(f"{symbol} Closing Price")
+        self.ax.set_xlabel("Date")
+        self.ax.set_ylabel("Price")
+        self.ax.legend()
+        self.canvas.draw()
+
+    def deposit_funds(self):
+        # Hier kun je code toevoegen om het bedrag op te halen dat de gebruiker wil toevoegen
+        amount = 100  # Dit is een voorbeeldbedrag, vervang dit door het daadwerkelijke bedrag dat de gebruiker invoert
+        self.trading_app.deposit_funds(amount)
+
+    def withdraw_funds(self):
+        # Hier kun je code toevoegen om het bedrag op te halen dat de gebruiker wil opnemen
+        amount = 100  # Dit is een voorbeeldbedrag, vervang dit door het daadwerkelijke bedrag dat de gebruiker invoert
+        self.trading_app.withdraw_funds(amount)
+
+    def toggle_demo_mode(self):
+        self.trading_app.toggle_demo_mode()
+
+
+# Functie om het hoofdvenster van de GUI te maken en uit te voeren
+def run_trading_app():
+    root = tk.Tk()
+    trading_app = TradingApp()  # Maak een instantie van TradingApp
+    trading_app_gui = TradingAppGUI(root, trading_app)  # Geef `root` en `trading_app` door aan TradingAppGUI
+    root.mainloop()
+
+# Voer de GUI-applicatie uit wanneer het script wordt uitgevoerd
+if __name__ == "__main__":
+    run_trading_app()
