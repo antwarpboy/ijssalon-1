@@ -2,18 +2,28 @@ import numpy as np
 import pandas as pd
 import time
 import requests
+import os
 import config
 import json
 import hashlib
 import secrets
 import sqlite3
 import asyncio
+import unittest
+import yfinance as yf
+import tkinter as tk
+from tkinter import ttk
+from unittest.mock import patch
+from io import StringIO
+from unittest.mock import patch,MagicMock
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from keras import Sequential
 from keras import Dense
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.widgets import Button
+from config import api_key,OANDA_API_KEY,OANDA_ACCOUNT_ID
 
 class User:
     def __init__(self, username, email, password):
@@ -141,16 +151,17 @@ class ForexBrokerAPI:
         else:
             print("Failed to place order:", response.json())
 
-# Vul hier je eigen OANDA API-sleutel en account ID in
-api_key = config.OANDA_API_KEY
-account_id = config.OANDA_ACCOUNT_ID
+# Haal de API-sleutels op uit het configuratiebestand
+oanda_api_key = config.OANDA_API_KEY
+oanda_account_id = config.OANDA_ACCOUNT_ID
+mijn_eigen_api_sleutel = config.MIJN_EIGEN_API_SLEUTEL
+
+# Controleer of de API-sleutels zijn ingesteld
+if oanda_api_key == "" or oanda_account_id == "" or mijn_eigen_api_sleutel == "":
+    raise ValueError("Een of meer API-sleutels zijn niet ingesteld in het configuratiebestand")
 
 # Maak een instantie van de ForexBrokerAPI-klasse
-broker_api = ForexBrokerAPI(api_key, account_id)
-       
-
-# Vul hier je eigen API-sleutel in
-api_key = config.api_key
+broker_api = ForexBrokerAPI(oanda_api_key, oanda_account_id)
 
 # Functie om gegevens op te halen voor een specifiek aandeel
 def fetch_data(symbol, function, interval='5min', outputsize='full'):
@@ -198,11 +209,44 @@ def fetch_data(symbol, function, interval='5min', outputsize='full'):
 
 # Functie om technische indicatoren te berekenen
 def calculate_macd(close_price, window_short=12, window_long=26, window_signal=9):
+    """
+    Bereken MACD (Moving Average Convergence Divergence) en signaallijn.
+
+    Parameters:
+    - close_price (pandas.Series): Pandas Series met sluitingsprijzen van aandelen.
+    - window_short (int, optioneel): Het venster voor de korte EMA (standaard is 12).
+    - window_long (int, optioneel): Het venster voor de lange EMA (standaard is 26).
+    - window_signal (int, optioneel): Het venster voor de signaallijn (standaard is 9).
+
+    Returns:
+    - macd (pandas.Series): Pandas Series met MACD-waarden.
+    - signal_line (pandas.Series): Pandas Series met signaallijn-waarden.
+    """
     ema_short = close_price.ewm(span=window_short).mean()
     ema_long = close_price.ewm(span=window_long).mean()
     macd = ema_short - ema_long
     signal_line = macd.ewm(span=window_signal).mean()
     return macd, signal_line
+class TestCalculateMACD(unittest.TestCase):
+    def test_calculate_macd(self):
+        # Voorbeeld invoerdata
+        close_price = pd.Series([10, 12, 15, 14, 16, 18, 17, 20, 22, 21])
+
+        # Verwachte uitvoerdata
+        expected_macd = pd.Series([0, 0.2, 0.6857, 0.6518, 0.9618, 1.5255, 1.2523, 2.2415, 3.3706, 3.4973])
+        expected_signal_line = pd.Series([0, 0.04, 0.2995, 0.4364, 0.6411, 0.9459, 1.0411, 1.5536, 2.2534, 2.9776])
+
+        # Bereken MACD
+        macd, signal_line = calculate_macd(close_price)
+
+        # Vergelijk de berekende MACD met de verwachte MACD
+        self.assertTrue(macd.equals(expected_macd))
+
+        # Vergelijk de berekende signaallijn met de verwachte signaallijn
+        self.assertTrue(signal_line.equals(expected_signal_line))
+
+if __name__ == '__main__':
+    unittest.main()
 
 def calculate_rsi(close_price, window=14):
     delta = close_price.diff()
@@ -213,6 +257,23 @@ def calculate_rsi(close_price, window=14):
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
     return rsi
+class TestCalculateRSI(unittest.TestCase):
+    def test_calculate_rsi(self):
+        # Voorbeeld invoerdata
+        close_price = pd.Series([10, 12, 15, 14, 16, 18, 17, 20, 22, 21])
+
+        # Verwachte uitvoerdata
+        expected_rsi = pd.Series([np.nan, np.nan, 100.0, 88.8889, 100.0, 100.0, 85.1852, 100.0, 100.0, 97.9021])
+
+        # Bereken RSI
+        rsi = calculate_rsi(close_price)
+
+        # Vergelijk de berekende RSI met de verwachte RSI
+        self.assertTrue(np.allclose(rsi, expected_rsi, equal_nan=True))
+
+if __name__ == '__main__':
+    unittest.main()
+
 
 def calculate_technical_indicators(data):
     data['SMA_50'] = data['4. close'].rolling(window=50).mean()
@@ -220,6 +281,29 @@ def calculate_technical_indicators(data):
     data['RSI'] = calculate_rsi(data['4. close'])
     data['MACD'], data['Signal_Line'] = calculate_macd(data['4. close'])
     return data
+class TestCalculateTechnicalIndicators(unittest.TestCase):
+    def test_calculate_technical_indicators(self):
+        # Voorbeeld invoerdata
+        data = pd.DataFrame({
+            '4. close': [10, 12, 15, 14, 16, 18, 17, 20, 22, 21]
+        })
+
+        # Verwachte uitvoerdata
+        expected_sma_50 = pd.Series([np.nan, np.nan, np.nan, np.nan, 13.8, 14.4, 15.0, 15.6, 16.2, 16.8])
+        expected_sma_200 = pd.Series([np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, 16.6])
+        expected_rsi = pd.Series([np.nan, np.nan, 100.0, 88.8889, 100.0, 100.0, 85.1852, 100.0, 100.0, 97.9021])
+
+        # Bereken technische indicatoren
+        result = calculate_technical_indicators(data)
+
+        # Vergelijk de berekende technische indicatoren met de verwachte resultaten
+        self.assertTrue(result['SMA_50'].equals(expected_sma_50))
+        self.assertTrue(result['SMA_200'].equals(expected_sma_200))
+        self.assertTrue(np.allclose(result['RSI'], expected_rsi, equal_nan=True))
+
+if __name__ == '__main__':
+    unittest.main()
+
 
 # Functie om de gegevens voor het model voor te bereiden
 def prepare_data(data):
@@ -228,6 +312,43 @@ def prepare_data(data):
     scaler = MinMaxScaler(feature_range=(0, 1))
     X_scaled = scaler.fit_transform(X)
     return X_scaled, data['4. close'].shift(-1)
+class TestPrepareData(unittest.TestCase):
+    def test_prepare_data(self):
+        # Voorbeeld invoerdata
+        data = pd.DataFrame({
+            'SMA_50': [10, 12, 15, 14, 16, np.nan, 17, 20, 22, 21],
+            'SMA_200': [8, 11, 14, 15, np.nan, 13, 16, 18, 20, 19],
+            'RSI': [np.nan, np.nan, 100.0, 88.8889, 100.0, 100.0, 85.1852, 100.0, 100.0, 97.9021],
+            'MACD': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+            'Signal_Line': [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95],
+            '4. close': [100, 102, 105, 104, 106, 108, 107, 110, 112, 111]
+        })
+
+        # Verwachte uitvoerdata
+        expected_X_scaled = np.array([
+            [0.33333333, 0.38461538, 1.        , 0.        , 0.        ],
+            [0.41666667, 0.46153846, 0.88888889, 0.11111111, 0.11111111],
+            [0.5       , 0.53846154, 1.        , 0.22222222, 0.22222222],
+            [0.46666667, 0.57692308, 0.88888889, 0.33333333, 0.33333333],
+            [0.53333333, 0.61538462, 1.        , 0.44444444, 0.44444444],
+            [0.56666667, 0.5       , 1.        , 0.55555556, 0.55555556],
+            [0.6       , 0.65384615, 0.85185185, 0.66666667, 0.66666667],
+            [0.66666667, 0.73076923, 1.        , 0.77777778, 0.77777778],
+            [0.73333333, 0.80769231, 1.        , 0.88888889, 0.88888889]
+        ])
+
+        expected_y = pd.Series([102, 105, 104, 106, 108, 107, 110, 112, 111, np.nan])
+
+        # Bereken voorbereide gegevens
+        X_scaled, y = prepare_data(data)
+
+        # Vergelijk de berekende voorbereide gegevens met de verwachte resultaten
+        self.assertTrue(np.allclose(X_scaled, expected_X_scaled))
+        self.assertTrue(y.equals(expected_y))
+
+if __name__ == '__main__':
+    unittest.main()
+
 
 # Functie om het AI-model te trainen
 def train_model(X_train, y_train):
@@ -236,18 +357,88 @@ def train_model(X_train, y_train):
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     model.fit(X_train, y_train, epochs=10, batch_size=32, verbose=0)
     return model
+class TestTrainModel(unittest.TestCase):
+    def test_train_model(self):
+        # Voorbeeld trainingsgegevens
+        X_train = np.array([[0.1, 0.2, 0.3, 0.4, 0.5],
+                            [0.2, 0.3, 0.4, 0.5, 0.6],
+                            [0.3, 0.4, 0.5, 0.6, 0.7]])
+        y_train = np.array([1, 0, 1])
+
+        # Train het model
+        model = train_model(X_train, y_train)
+
+        # Genereer voorbeeld testgegevens
+        X_test = np.array([[0.4, 0.5, 0.6, 0.7, 0.8]])
+
+        # Voorspel de uitvoer met het getrainde model
+        predictions = model.predict(X_test)
+
+        # Controleer of de voorspellingen binnen het verwachte bereik liggen
+        self.assertTrue(np.all(predictions >= 0))
+        self.assertTrue(np.all(predictions <= 1))
+
+if __name__ == '__main__':
+    unittest.main()
 
 # Functie om handelssignalen te genereren
 def generate_signals(data, model):
     X, _ = prepare_data(data)
     signals = model.predict(X)
     return signals
+class TestGenerateSignals(unittest.TestCase):
+    def test_generate_signals(self):
+        # Voorbeeld data en model
+        data = pd.DataFrame({
+            'SMA_50': [0.1, 0.2, 0.3, 0.4, 0.5],
+            'SMA_200': [0.2, 0.3, 0.4, 0.5, 0.6],
+            'RSI': [0.3, 0.4, 0.5, 0.6, 0.7],
+            'MACD': [0.4, 0.5, 0.6, 0.7, 0.8],
+            'Signal_Line': [0.5, 0.6, 0.7, 0.8, 0.9],
+            '4. close': [100, 102, 105, 104, 106]
+        })
+
+        model = Sequential([Dense(units=50, input_shape=(5,), activation='relu'),
+                            Dense(units=1, activation='sigmoid')])
+        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+        # Genereer signalen
+        signals = generate_signals(data, model)
+
+        # Controleer of de signalen binnen het verwachte bereik liggen (tussen 0 en 1)
+        self.assertTrue(np.all(signals >= 0))
+        self.assertTrue(np.all(signals <= 1))
+
+if __name__ == '__main__':
+    unittest.main()
+
 
 # Functie om handel uit te voeren op basis van signalen
 def execute_trade(symbol, signals):
     last_signal = signals[-1]
     action = "Buying" if last_signal >= 0.5 else "Selling"
     print(f"{action} {symbol}.")
+class TestExecuteTrade(unittest.TestCase):
+    def test_execute_trade(self):
+        # Voorbeeld signalen
+        signals_buy = np.array([0.6, 0.7, 0.8, 0.9, 0.85])
+        signals_sell = np.array([0.4, 0.3, 0.2, 0.1, 0.15])
+
+        # Test "Buying" actie
+        with patch('sys.stdout', new=StringIO()) as fake_out:
+            execute_trade('AAPL', signals_buy)
+            output = fake_out.getvalue().strip()
+            self.assertEqual(output, 'Buying AAPL.')
+
+        # Test "Selling" actie
+        with patch('sys.stdout', new=StringIO()) as fake_out:
+            execute_trade('AAPL', signals_sell)
+            output = fake_out.getvalue().strip()
+            self.assertEqual(output, 'Selling AAPL.')
+
+if __name__ == '__main__':
+    unittest.main()
+
 
 # Hoofdfunctie om geautomatiseerd handelen uit te voeren
 async def fetch_data_async(symbol, function, interval='5min', outputsize='full'):
@@ -272,6 +463,84 @@ async def auto_trade_async(symbols):
             model = train_model(X_train, y_train)
             signals = generate_signals(data, model)
             execute_trade(symbol, signals)
+# Definieer de mock_data variabele met voorbeeldgegevens voor elk symbool
+mock_data_stoxx50 = {
+    'Time Series (5min)': {
+        '2024-04-26 09:30:00': {'open': '100', 'high': '110', 'low': '90', 'close': '105', 'volume': '10000'},
+        '2024-04-26 09:35:00': {'open': '105', 'high': '115', 'low': '95', 'close': '100', 'volume': '15000'},
+        # Voeg meer voorbeelddata toe indien nodig
+    }
+}
+
+mock_data_ndx = {
+    # Mock data voor NDX symbool
+}
+
+mock_data_xauusd = {
+    # Mock data voor XAUUSD symbool
+}
+
+mock_data_btcusd = {
+    # Mock data voor BTCUSD symbool
+}
+
+mock_data_ethusd = {
+    # Mock data voor ETHUSD symbool
+}
+
+mock_data_eurusd = {
+    # Mock data voor EURUSD symbool
+}
+
+# Definieer de mock_fetch_data_async functie
+async def mock_fetch_data_async(symbol, function, interval='5min', outputsize='full'):
+    if symbol == 'STOXX50':
+        return 'STOXX50', mock_data_stoxx50
+    elif symbol == 'NDX':
+        return 'NDX', mock_data_ndx
+    elif symbol == 'XAUUSD':
+        return 'XAUUSD', mock_data_xauusd
+    elif symbol == 'BTCUSD':
+        return 'BTCUSD', mock_data_btcusd
+    elif symbol == 'ETHUSD':
+        return 'ETHUSD', mock_data_ethusd
+    elif symbol == 'EURUSD':
+        return 'EURUSD', mock_data_eurusd
+    else:
+        return None, None
+
+class TestAutoTradeAsync(unittest.IsolatedAsyncioTestCase):
+    async def test_auto_trade_async(self):
+        # Mock de functies die in auto_trade_async worden aangeroepen
+        mock_calculate_technical_indicators = MagicMock()
+        mock_prepare_data = MagicMock()
+        mock_train_test_split = MagicMock()
+        mock_train_model = MagicMock()
+        mock_generate_signals = MagicMock()
+        mock_execute_trade = MagicMock()
+
+        # Pas de mocks toe in de functie
+        with patch('auto_trade_async.fetch_data_async', mock_fetch_data_async), \
+             patch('auto_trade_async.calculate_technical_indicators', mock_calculate_technical_indicators), \
+             patch('auto_trade_async.prepare_data', mock_prepare_data), \
+             patch('auto_trade_async.train_test_split', mock_train_test_split), \
+             patch('auto_trade_async.train_model', mock_train_model), \
+             patch('auto_trade_async.generate_signals', mock_generate_signals), \
+             patch('auto_trade_async.execute_trade', mock_execute_trade):
+
+            # Voer de auto_trade_async functie uit met een voorbeeldsymbool
+            await auto_trade_async(['STOXX50'])
+
+        # Controleer of de functies correct zijn aangeroepen
+        mock_calculate_technical_indicators.assert_called_once()
+        mock_prepare_data.assert_called_once()
+        mock_train_test_split.assert_called_once()
+        mock_train_model.assert_called_once()
+        mock_generate_signals.assert_called_once()
+        mock_execute_trade.assert_called_once()
+
+if __name__ == '__main__':
+    unittest.main()
 
 # Start geautomatiseerd handelen voor elk opgegeven aandeel
 symbols = ['STOXX50', 'NDX', 'XAUUSD', 'BTCUSD', 'ETHUSD', 'EURUSD']
@@ -346,6 +615,67 @@ update_balance()
 plot_balance()
 
 # Voeg de TradingApp-klasse toe met demo-functionaliteit
+
+class TradingAppGUI:
+    def __init__(self, master):
+        self.master = master
+        master.title("Trading App")
+
+        # Frames voor verschillende secties van de GUI
+        self.top_frame = ttk.Frame(master)
+        self.top_frame.pack(pady=10)
+        self.middle_frame = ttk.Frame(master)
+        self.middle_frame.pack(pady=10)
+        self.bottom_frame = ttk.Frame(master)
+        self.bottom_frame.pack(pady=10)
+
+        # Label en invoerveld voor het invoeren van het tickersymbool
+        self.symbol_label = ttk.Label(self.top_frame, text="Enter Ticker Symbol:")
+        self.symbol_label.grid(row=0, column=0)
+        self.symbol_entry = ttk.Entry(self.top_frame, width=10)
+        self.symbol_entry.grid(row=0, column=1)
+
+        # Knop om gegevens op te halen en grafiek te plotten
+        self.plot_button = ttk.Button(self.top_frame, text="Plot", command=self.plot_data)
+        self.plot_button.grid(row=0, column=2)
+
+        # Dropdownmenu voor het selecteren van de handelsstrategie
+        self.strategy_label = ttk.Label(self.middle_frame, text="Select Trading Strategy:")
+        self.strategy_label.grid(row=0, column=0)
+        self.strategy_var = tk.StringVar()
+        self.strategy_dropdown = ttk.Combobox(self.middle_frame, textvariable=self.strategy_var, width=20)
+        self.strategy_dropdown['values'] = ('Simple Moving Average', 'RSI', 'MACD')
+        self.strategy_dropdown.grid(row=0, column=1)
+        self.strategy_dropdown.current(0)
+
+        # Canvas voor het plotten van de handelsgrafiek
+        self.fig, self.ax = plt.subplots(figsize=(8, 4))
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.bottom_frame)
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    def plot_data(self):
+        # Haal gegevens op van Yahoo Finance
+        symbol = self.symbol_entry.get()
+        data = yf.download(symbol, start="2023-01-01", end="2024-01-01")
+
+        # Plot de sluitingsprijs
+        self.ax.clear()
+        self.ax.plot(data.index, data['Close'], label="Close Price")
+        self.ax.set_title(f"{symbol} Closing Price")
+        self.ax.set_xlabel("Date")
+        self.ax.set_ylabel("Price")
+        self.ax.legend()
+        self.canvas.draw()
+
+# Functie om het hoofdvenster van de GUI te maken en uit te voeren
+def run_trading_app():
+    root = tk.Tk()
+    trading_app_gui = TradingAppGUI(root)
+    root.mainloop()
+
+# Voer de GUI-applicatie uit wanneer het script wordt uitgevoerd
+if __name__ == "__main__":
+    run_trading_app()
 class TradingApp:
     DEMO_BALANCE = 50000  # Nep balance voor demo-modus
 
