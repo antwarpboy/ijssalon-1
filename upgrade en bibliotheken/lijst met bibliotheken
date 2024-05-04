@@ -1,0 +1,26 @@
+# lijst van biliotheken voor alle projecten
+# - {"tensorflow","pytorch","numpy","scikit-learn","scipy","pandas","keras","openai","tkinker","speechrecognition","hashlib","shutil","matplotlib","secrets,"asyncio","yfinance"}
+
+# deep-learning
+# tensorflow : word beschouwd als een van de beste python bibliotheken voor deep learning toepassingen.( ontwikkeld door google brain team en bied een breed scala aan flexibele tools, bibliotheken , en communitybronnen)
+#            : kan werken met CPU en GPU maar werkt het beste met TPU {de python bibliotheek word vaak gebruik voor reinforcement learing te implementeren in deep-learning modellen}
+            #: belangrijke kenmerken tensorflow - flexibele architectuur en framework
+            #                                   - draaid op verschillende computerplatforms
+            #                                   - abstracte mogelijkheden
+            #                                   - beheert diepe neurale netwerken
+
+# pytorch    : is ook een populaire bibliotheek voor deep-learning en is gemaakt door het ai-onderzoeksteam van facebook, het is vooral handig voor deep-learning toepassingen zoals NLP en computervisie.
+#            : enkele van de beste aspecten van pytorch zijn de hoge uitvoeringssnelheid zelfs met zware grafieken(pytorch heeft krachtige api's en een toolkit voor natuurlijke taal)
+            #: belangrijke kenmerken pytorch    - statistische distributie en bewerking
+            #                                   - controle datasets
+            #                                   - ontwikkeling van deep-learning modellen
+            #                                   - zeer flexibel
+
+# numpy      : kan naadloos worden gebruikt voor grote multidimensionale array en matrixverwerkingen het is gebaseerd op een groot aantal wiskundige functies op hoog niveau .
+#            : numpy-arrays hebben minder opslagruimte en ze zijn sneller en handiger in gebruik. ( de gegeven kunnen in de matrix worden gemanipuleerd getransponeerd en opnieuw worden vormgegeven) 
+            #: belangrijke kenmerken numpy      - vormmanipulatie
+            #                                   - hoogwaardig N-dimensionaal array-object
+            #                                   - gegevens opschonen/manipuleren
+            #                                   - statistische bewerkingen en lineaire algebra
+
+# 
