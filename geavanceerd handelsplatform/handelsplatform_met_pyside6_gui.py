@@ -10,8 +10,7 @@ import sqlite3
 import asyncio
 import unittest
 import yfinance as yf
-import tkinter as tk
-from tkinter import ttk
+from PySide6 import QtWidgets, QtGui
 from unittest.mock import patch
 from io import StringIO
 from unittest.mock import patch,MagicMock
@@ -21,7 +20,7 @@ from keras import Sequential
 from keras import Dense, Dropout
 from keras import regularizers
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.widgets import Button
 from config import api_key,OANDA_API_KEY,OANDA_ACCOUNT_ID
 from sklearn.model_selection import GridSearchCV
@@ -780,45 +779,50 @@ class TradingApp:
             self._trading_balance = self.DEMO_BALANCE
         print("Demo mode is now", self._demo_mode)
 
-
+# dit is een gui met pyside6
 class TradingAppGUI:
     def __init__(self, master, trading_app):
         self.master = master
         self.trading_app = trading_app
-        master.title("Trading App")
+        master.setWindowTitle("Trading App")
 
-    
         # Frames voor verschillende secties van de GUI
-        self.top_frame = ttk.Frame(master)
-        self.top_frame.pack(pady=10)
-        self.middle_frame = ttk.Frame(master)
-        self.middle_frame.pack(pady=10)
-        self.bottom_frame = ttk.Frame(master)
-        self.bottom_frame.pack(pady=10)
+        self.top_frame = QtWidgets.QFrame(master)
+        self.top_frame.setLayout(QtWidgets.QHBoxLayout())
+        self.middle_frame = QtWidgets.QFrame(master)
+        self.middle_frame.setLayout(QtWidgets.QHBoxLayout())
+        self.bottom_frame = QtWidgets.QFrame(master)
+        self.bottom_frame.setLayout(QtWidgets.QHBoxLayout())
+
+        master.layout = QtWidgets.QVBoxLayout()
+        master.layout.addWidget(self.top_frame)
+        master.layout.addWidget(self.middle_frame)
+        master.layout.addWidget(self.bottom_frame)
+        master.setLayout(master.layout)
 
         # Label en invoerveld voor het invoeren van het tickersymbool
-        self.symbol_label = ttk.Label(self.top_frame, text="Enter Ticker Symbol:")
-        self.symbol_label.grid(row=0, column=0)
-        self.symbol_entry = ttk.Entry(self.top_frame, width=10)
-        self.symbol_entry.grid(row=0, column=1)
+        self.symbol_label = QtWidgets.QLabel("Enter Ticker Symbol:")
+        self.symbol_entry = QtWidgets.QLineEdit()
+        self.top_frame.layout.addWidget(self.symbol_label)
+        self.top_frame.layout.addWidget(self.symbol_entry)
 
         # Knop om gegevens op te halen en grafiek te plotten
-        self.plot_button = ttk.Button(self.top_frame, text="Plot", command=self.plot_data)
-        self.plot_button.grid(row=0, column=2)
+        self.plot_button = QtWidgets.QPushButton("Plot")
+        self.plot_button.clicked.connect(self.plot_data)
+        self.top_frame.layout.addWidget(self.plot_button)
 
         # Dropdownmenu voor het selecteren van de handelsstrategie
-        self.strategy_label = ttk.Label(self.middle_frame, text="Select Trading Strategy:")
-        self.strategy_label.grid(row=0, column=0)
-        self.strategy_var = tk.StringVar()
-        self.strategy_dropdown = ttk.Combobox(self.middle_frame, textvariable=self.strategy_var, width=20)
-        self.strategy_dropdown['values'] = ('Simple Moving Average', 'RSI', 'MACD', 'EMA', 'Bollinger Bands', 'Stochastic Oscillator','ATR')
-        self.strategy_dropdown.grid(row=0, column=1)
-        self.strategy_dropdown.current(0)
+        self.strategy_label = QtWidgets.QLabel("Select Trading Strategy:")
+        self.strategy_dropdown = QtWidgets.QComboBox()
+        self.strategy_dropdown.addItems(['Simple Moving Average', 'RSI', 'MACD', 'EMA', 'Bollinger Bands', 'Stochastic Oscillator', 'ATR'])
+        self.strategy_dropdown.setCurrentIndex(0)
+        self.middle_frame.layout.addWidget(self.strategy_label)
+        self.middle_frame.layout.addWidget(self.strategy_dropdown)
 
         # Canvas voor het plotten van de handelsgrafiek
         self.fig, self.ax = plt.subplots(figsize=(8, 4))
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.bottom_frame)
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        self.canvas = FigureCanvas(self.fig)
+        self.bottom_frame.layout.addWidget(self.canvas)
 
         # Initialisatie van variabelen voor balansinformatie
         self.trading_balance = 0
@@ -830,14 +834,18 @@ class TradingAppGUI:
         self.plot_balance()
 
         # Knoppen voor het storten en opnemen van geld
-        self.deposit_button = ttk.Button(self.middle_frame, text="Deposit Funds", command=self.deposit_funds)
-        self.deposit_button.grid(row=1, column=0, pady=5)
-        self.withdraw_button = ttk.Button(self.middle_frame, text="Withdraw Funds", command=self.withdraw_funds)
-        self.withdraw_button.grid(row=1, column=1, pady=5)
+        self.deposit_button = QtWidgets.QPushButton("Deposit Funds")
+        self.deposit_button.clicked.connect(self.deposit_funds)
+        self.middle_frame.layout.addWidget(self.deposit_button)
+
+        self.withdraw_button = QtWidgets.QPushButton("Withdraw Funds")
+        self.withdraw_button.clicked.connect(self.withdraw_funds)
+        self.middle_frame.layout.addWidget(self.withdraw_button)
 
         # Knop voor het toggelen van demo-modus
-        self.demo_mode_button = ttk.Button(self.middle_frame, text="Toggle Demo Mode", command=self.toggle_demo_mode)
-        self.demo_mode_button.grid(row=1, column=2, pady=5)
+        self.demo_mode_button = QtWidgets.QPushButton("Toggle Demo Mode")
+        self.demo_mode_button.clicked.connect(self.toggle_demo_mode)
+        self.middle_frame.layout.addWidget(self.demo_mode_button)
 
     def update_balance(self):
         self.trading_balance = np.random.randint(1000, 5000)
@@ -856,7 +864,7 @@ class TradingAppGUI:
 
     def plot_data(self):
         # Haal gegevens op van Yahoo Finance
-        symbol = self.symbol_entry.get()
+        symbol = self.symbol_entry.text()
         data = yf.download(symbol, start="2023-01-01", end="2024-01-01")
 
         # Voer technische analyse uit met behulp van StochAnalyzer
@@ -888,13 +896,12 @@ class TradingAppGUI:
 
 # Functie om het hoofdvenster van de GUI te maken en uit te voeren
 def run_trading_app():
-    root = tk.Tk()
+    app = QtWidgets.QApplication([])
+    root = QtWidgets.QMainWindow()
     trading_app = TradingApp()  # Maak een instantie van TradingApp
     trading_app_gui = TradingAppGUI(root, trading_app)  # Geef `root` en `trading_app` door aan TradingAppGUI
-    root.mainloop()
-    
-    # Gebruik trading_app_gui ergens in je code om de waarschuwing te voorkomen
-    trading_app_gui.some_method()  # Voorbeeld van het aanroepen van een methode van trading_app_gui
+    root.show()
+    app.exec()
 
 # Voer de GUI-applicatie uit wanneer het script wordt uitgevoerd
 if __name__ == "__main__":
