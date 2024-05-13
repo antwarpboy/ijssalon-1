@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import time
 import requests
-import config
+import csv
 import json
 import hashlib
 import secrets
@@ -10,6 +10,8 @@ import sqlite3
 import asyncio
 import unittest
 import yfinance as yf
+import multiprocessing
+import aiohttp
 from PySide6 import QtWidgets, QtGui
 from unittest.mock import patch
 from io import StringIO
@@ -22,10 +24,12 @@ from keras import regularizers
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.widgets import Button
-from config import api_key,OANDA_API_KEY,OANDA_ACCOUNT_ID
 from sklearn.model_selection import GridSearchCV
 from keras import KerasClassifier
-
+from sklearn.metrics import confusion_matrix, roc_curve, auc
+from PyQt5.QtWidgets import QInputDialog
+from PyQt5.QtWidgets import QAction, QMenuBar, QInputDialog
+from PyQt5.QtCore import QDateTime,Qt
 class User:
     def __init__(self, username, email, password):
         self.username = username
@@ -152,20 +156,63 @@ class ForexBrokerAPI:
         else:
             print("Failed to place order:", response.json())
 
-# Haal de API-sleutels op uit het configuratiebestand
-oanda_api_key = config.OANDA_API_KEY
-oanda_account_id = config.OANDA_ACCOUNT_ID
-mijn_eigen_api_sleutel = config.MIJN_EIGEN_API_SLEUTEL
+# Functie om API-sleutels uit CSV-bestand op te halen
+def get_api_keys_from_csv(file_path):
+    with open(file_path, 'r') as file:
+        reader = csv.DictReader(file)
+        keys = next(reader)  # Veronderstelt dat de eerste rij in de CSV de sleutels bevat
+        return keys
 
+# CSV-bestandspad
+csv_file_path = "D:/vscodedatasets/apisleutelhandel/api_franky/oanda_apisleutel_accound_id.csv"
+
+# Haal de API-sleutels op uit het CSV-bestand
+api_keys = get_api_keys_from_csv(csv_file_path)
+
+# Haal de API-sleutels individueel op
+oanda_api_key = api_keys.get('oanda_api_key', '')
+oanda_account_id = api_keys.get('oanda_account_id', '')
+mijn_eigen_api_sleutel = api_keys.get('mijn_eigen_api_sleutel', '')
+api_key = api_keys.get('api_key', '')  
 # Controleer of de API-sleutels zijn ingesteld
 if oanda_api_key == "" or oanda_account_id == "" or mijn_eigen_api_sleutel == "":
-    raise ValueError("Een of meer API-sleutels zijn niet ingesteld in het configuratiebestand")
+    raise ValueError("Een of meer API-sleutels zijn niet ingesteld in het CSV-bestand")
 
 # Maak een instantie van de ForexBrokerAPI-klasse
 broker_api = ForexBrokerAPI(oanda_api_key, oanda_account_id)
-def analyze_data(data):
-    # Voer hier de analyse uit op de gegeven data
-    pass  # Plaats hier de code voor de analyse
+payment_gateway=PaymentGateway(mijn_eigen_api_sleutel)
+
+
+def parallel_task():
+    # Voer parallelle taak uit
+# Maak processen
+   process1 = multiprocessing.Process(target=parallel_task)
+   process2 = multiprocessing.Process(target=parallel_task)
+# Start processen
+   process1.start()
+   process2.start()
+# Wacht op de voltooiing van processen
+   process1.join()
+   process2.join()
+
+def plot_technical_indicators(data, indicator_name, indicator_values):
+    """
+    Genereer een grafiek van een technische indicator.
+    
+    Parameters:
+    - data (pandas.DataFrame): Pandas DataFrame met de invoerdata.
+    - indicator_name (str): Naam van de technische indicator.
+    - indicator_values (pandas.Series): Pandas Series met de waarden van de technische indicator.
+    """
+    plt.figure(figsize=(10, 6))
+    plt.plot(data.index, data['Close'], label='Close Price', color='blue')
+    plt.plot(data.index, indicator_values, label=indicator_name, color='red')
+    plt.title(f'{indicator_name} Analysis')
+    plt.xlabel('Date')
+    plt.ylabel('Value')
+    plt.legend()
+    plt.grid(True)
+    plt.show()  
 
 # Functie om gegevens op te halen voor een specifiek aandeel
 def fetch_data(symbol, function, interval='5min', outputsize='full'):
@@ -175,8 +222,6 @@ def fetch_data(symbol, function, interval='5min', outputsize='full'):
     - function (str): Het soort gegevens dat moet worden opgehaald (bijv. 'TIME_SERIES_INTRADAY').
     - interval (str, optioneel): Het interval voor de gegevens (standaard is '5min').
     - outputsize (str, optioneel): De grootte van de uitvoer (standaard is 'full').
-    
-
     Returns:
     - pd.DataFrame of None: Een DataFrame met de opgehaalde gegevens of None als er een fout optreedt.
     """
@@ -218,7 +263,7 @@ def calculate_bollinger_bands(close_price, window=20, num_std=2):
     upper_band = rolling_mean + num_std * rolling_std
     lower_band = rolling_mean - num_std * rolling_std
     return upper_band, lower_band
-
+# functie om technische indicators te berekenen
 def calculate_stochastic_oscillator(close_price, high_price, low_price, window=14):
     lowest_low = low_price.rolling(window=window).min()
     highest_high = high_price.rolling(window=window).max()
@@ -276,11 +321,9 @@ if __name__ == '__main__':
 def calculate_ema(data, window):
     """
     Bereken het exponentieel gewogen bewegende gemiddelde (EMA) van de gegeven data met het opgegeven venster.
-
     Parameters:
     - data (pandas.Series): Pandas Series met de gegevens waarvoor het EMA wordt berekend.
     - window (int): Het venster voor het EMA-berekening.
-
     Returns:
     - ema (pandas.Series): Pandas Series met de EMA-waarden.
     """
@@ -290,13 +333,11 @@ def calculate_ema(data, window):
 def calculate_macd(close_price, window_short=12, window_long=26, window_signal=9):
     """
     Bereken MACD (Moving Average Convergence Divergence), signaallijn en histogram.
-
     Parameters:
     - close_price (pandas.Series): Pandas Series met sluitingsprijzen van aandelen.
     - window_short (int, optioneel): Het venster voor de korte EMA (standaard is 12).
     - window_long (int, optioneel): Het venster voor de lange EMA (standaard is 26).
     - window_signal (int, optioneel): Het venster voor de signaallijn (standaard is 9).
-
     Returns:
     - macd (pandas.Series): Pandas Series met MACD-waarden.
     - signal_line (pandas.Series): Pandas Series met signaallijn-waarden.
@@ -305,13 +346,10 @@ def calculate_macd(close_price, window_short=12, window_long=26, window_signal=9
     # Bereken korte en lange EMA
     ema_short = calculate_ema(close_price, window_short)
     ema_long = calculate_ema(close_price, window_long)
-
     # Bereken MACD-lijn
     macd_line = ema_short - ema_long
-
     # Bereken signaallijn
     signal_line = calculate_ema(macd_line, window_signal)
-
     # Bereken histogram
     histogram = macd_line - signal_line
 
@@ -322,21 +360,16 @@ class TestCalculateMACD(unittest.TestCase):
     def test_calculate_macd(self):
         # Voorbeeld invoerdata
         close_price = pd.Series([10, 12, 15, 14, 16, 18, 17, 20, 22, 21])
-
         # Bereken EMA's voor de invoerdata
         ema_short = calculate_ema(close_price, 12)
         ema_long = calculate_ema(close_price, 26)
-
         # Verwachte MACD en signaallijn
         expected_macd = ema_short - ema_long
         expected_signal_line = calculate_ema(expected_macd, 9)
-
         # Bereken MACD en signaallijn met de functie
         macd, signal_line = calculate_macd(close_price)
-
         # Vergelijk de berekende MACD met de verwachte MACD
         self.assertTrue(macd.equals(expected_macd))
-
         # Vergelijk de berekende signaallijn met de verwachte signaallijn
         self.assertTrue(signal_line.equals(expected_signal_line))
 
@@ -369,26 +402,21 @@ class TestCalculateRSI(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
-
+# berekenen van technische indicators
 def calculate_technical_indicators(data):
     data['SMA_50'] = data['4. close'].rolling(window=50).mean()
     data['SMA_200'] = data['4. close'].rolling(window=200).mean()
     data['RSI'] = calculate_rsi(data['4. close'])
-    
-    # Bereken EMA en voeg toe aan data
     ema_window = 20  # bijvoorbeeld, kies het gewenste venster voor EMA
     data['EMA'] = calculate_ema(data['4. close'], ema_window)
-    
-    # Bereken MACD en andere indicatoren
     data['MACD'], data['Signal_Line'], _ = calculate_macd(data['4. close'])
-
     data['Upper_Band'], data['Lower_Band'] = calculate_bollinger_bands(data['4. close'])
     data['Stochastic_Oscillator'] = calculate_stochastic_oscillator(data['4. close'], data['2. high'], data['3. low'])
     data['ATR'] = calculate_atr(data['2. high'], data['3. low'], data['4. close'])
     
     return data
 
-
+# testen van de technische indicators
 class TestCalculateTechnicalIndicators(unittest.TestCase):
     def test_calculate_technical_indicators(self):
         # Voorbeeld invoerdata
@@ -432,6 +460,99 @@ class TestCalculateTechnicalIndicators(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+def analyze_and_visualize_indicators(data):
+    """
+    Analyseer en visualiseer de technische indicatoren.
+    
+    Parameters:
+    - data (pandas.DataFrame): Pandas DataFrame met de gegevens en berekende technische indicatoren.
+    """
+    # Plot de sluitingsprijs samen met SMA-lijnen
+    plt.figure(figsize=(12, 8))
+    plt.plot(data.index, data['4. close'], label='Close Price', color='blue')
+    plt.plot(data.index, data['SMA_50'], label='SMA 50', color='orange')
+    plt.plot(data.index, data['SMA_200'], label='SMA 200', color='green')
+    plt.title('Closing Price with SMA Lines')
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+    
+    # Plot RSI
+    plt.figure(figsize=(12, 6))
+    plt.plot(data.index, data['RSI'], label='RSI', color='purple')
+    plt.axhline(y=70, color='red', linestyle='--')
+    plt.axhline(y=30, color='green', linestyle='--')
+    plt.title('RSI Analysis')
+    plt.xlabel('Date')
+    plt.ylabel('RSI')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+    
+    # Plot EMA
+    plt.figure(figsize=(12, 6))
+    plt.plot(data.index, data['EMA'], label='EMA', color='magenta')
+    plt.plot(data.index, data['4. close'], label='Close Price', color='blue', alpha=0.5)
+    plt.title('EMA Analysis')
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+    
+    # Plot MACD
+    plt.figure(figsize=(12, 6))
+    plt.plot(data.index, data['MACD'], label='MACD', color='cyan')
+    plt.plot(data.index, data['Signal_Line'], label='Signal Line', color='red', linestyle='--')
+    plt.title('MACD Analysis')
+    plt.xlabel('Date')
+    plt.ylabel('MACD')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+    
+    # Plot Bollinger Bands
+    plt.figure(figsize=(12, 6))
+    plt.plot(data.index, data['4. close'], label='Close Price', color='blue')
+    plt.plot(data.index, data['Upper_Band'], label='Upper Band', color='red')
+    plt.plot(data.index, data['Lower_Band'], label='Lower Band', color='green')
+    plt.title('Bollinger Bands Analysis')
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+    
+    # Plot ATR
+    plt.figure(figsize=(12, 6))
+    plt.plot(data.index, data['ATR'], label='ATR', color='orange')
+    plt.title('ATR Analysis')
+    plt.xlabel('Date')
+    plt.ylabel('ATR')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+    
+    # Plot Stochastic Oscillator
+    plt.figure(figsize=(12, 6))
+    plt.plot(data.index, data['Stochastic_Oscillator'], label='Stochastic Oscillator', color='brown')
+    plt.title('Stochastic Oscillator Analysis')
+    plt.xlabel('Date')
+    plt.ylabel('Stochastic Oscillator')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+# definieer en vul data met je gegevens
+data=...
+# Bereken technische indicatoren
+data = calculate_technical_indicators(data)
+
+# Analyseer en visualiseer technische indicatoren
+analyze_and_visualize_indicators(data)
+    
 
 # Functie om de gegevens van de ai voor te bereiden
 def prepare_data(data):
@@ -494,6 +615,7 @@ def create_model(optimizer='adam', dropout_rate=0.0, kernel_regularizer=0.0):
     model = Sequential([
         Dense(units=50, input_shape=(X_train.shape[1],), activation='relu', kernel_regularizer=regularizers.l2(kernel_regularizer)),
         Dropout(dropout_rate),
+        Dense(units=40, activation='relu'),
         Dense(units=30, activation='relu'),
         Dense(units=20, activation='relu'),
         Dense(units=10, activation='relu'),
@@ -509,7 +631,9 @@ model = KerasClassifier(build_fn=create_model, verbose=0)
 param_grid = {
     'optimizer': ['adam', 'rmsprop'],
     'dropout_rate': [0.2, 0.3, 0.4],
-    'kernel_regularizer': [0.01, 0.02, 0.03]
+    'kernel_regularizer': [0.01, 0.02, 0.03],
+    'batch_size': [16, 32, 64],  # verschillende batchgroottes uitproberen
+    'epochs': [10, 20, 30]        # verschillende aantallen epochs uitproberen
 }
 
 # Perform grid search
@@ -518,6 +642,7 @@ grid_result = grid.fit(X_train, y_train)
 
 # Print results
 print("Best: %f using %s" % (grid_result.best_score_, grid_result.best_params_))
+
 
 # vanaf hier beginnen we met het testtrainen van de ai 
 class TestTrainModel(unittest.TestCase):
@@ -544,6 +669,50 @@ class TestTrainModel(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
+def analyze_model_performance(model, X_test, y_test):
+    """
+    Analyseer de prestaties van het getrainde model op testgegevens.
+    
+    Parameters:
+    - model: Het getrainde model.
+    - X_test: Testkenmerken.
+    - y_test: Ware labels voor de testgegevens.
+    """
+    # Evalueren van het model op testgegevens
+    accuracy = model.evaluate(X_test, y_test)[1]
+    print("Accuracy on test data:", accuracy)
+
+    # Maak voorspellingen op testgegevens
+    predictions = model.predict(X_test)
+
+    # Genereer en toon de confusion matrix
+    cm = confusion_matrix(y_test, predictions)
+    print("Confusion Matrix:")
+    print(cm)
+
+    # Traceer de ROC curve en bereken AUC
+    fpr, tpr, thresholds = roc_curve(y_test, predictions)
+    auc_score = auc(fpr, tpr)
+    plt.figure()
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % auc_score)
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC Curve')
+    plt.legend(loc="lower right")
+    plt.show()
+
+    # Visualiseer voorspellingen versus ware labels
+    plt.figure()
+    plt.plot(y_test, label='True Labels')
+    plt.plot(predictions, label='Predicted Labels')
+    plt.title('True Labels vs Predicted Labels')
+    plt.xlabel('Sample')
+    plt.ylabel('Label')
+    plt.legend()
+    plt.show()
 
 
 # Functie om handelssignalen te genereren
@@ -583,14 +752,54 @@ class TestGenerateSignals(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
+def analyze_signals(data, signals):
+    # Voeg de gegenereerde signalen toe aan de dataset
+    data['Signal'] = signals
 
+    # Analyseer de signalen
+    buy_signals = data[data['Signal'] >= 0.5]  # Signalen groter dan of gelijk aan 0.5 worden als "koop" geclassificeerd
+    sell_signals = data[data['Signal'] < 0.5]  # Signalen kleiner dan 0.5 worden als "verkoop" geclassificeerd
+
+    # Bereken de winst/verlies voor elke handelssignaal
+    buy_profit = buy_signals['4. close'].diff().cumsum().iloc[-1]
+    sell_profit = sell_signals['4. close'].diff().cumsum().iloc[-1]
+
+    # Bereken de nauwkeurigheid van de signalen
+    total_signals = len(data)
+    correct_signals = len(data[data['Signal'] >= 0.5]) if buy_profit > 0 else len(data[data['Signal'] < 0.5])
+    accuracy = correct_signals / total_signals * 100 if total_signals != 0 else 0
+
+    # Print de resultaten
+    print("Totaal aantal signalen:", total_signals)
+    print("Aantal juiste signalen:", correct_signals)
+    print("Nauwkeurigheid van de signalen:", accuracy)
+    print("Winst bij verkoopsignalen:", sell_profit)
+    print("Winst bij koopsignalen:", buy_profit)
+
+    # Grafische analyse
+    plt.figure(figsize=(12, 6))
+    plt.plot(data.index, data['4. close'], label='Prijs')
+    plt.scatter(buy_signals.index, buy_signals['4. close'], marker='^', color='green', label='Koop Signalen')
+    plt.scatter(sell_signals.index, sell_signals['4. close'], marker='v', color='red', label='Verkoop Signalen')
+    plt.title('Handelssignalen')
+    plt.xlabel('Datum')
+    plt.ylabel('Prijs')
+    plt.legend()
+    plt.show()
+
+# Genereer signalen
+signals = generate_signals(data, model)
+
+# Analyseer de signalen
+analyze_signals(data, signals)
 
 
 # Functie om handel uit te voeren op basis van signalen
-def execute_trade(symbol, signals):
+def execute_trade(*symbols, signals):
     last_signal = signals[-1]
     action = "Buying" if last_signal >= 0.5 else "Selling"
-    print(f"{action} {symbol}.")
+    symbol_str = ','.join(symbols)
+    print(f"{action} {symbol_str}.")
 
 class TestExecuteTrade(unittest.TestCase):
     def test_execute_trade(self):
@@ -600,52 +809,126 @@ class TestExecuteTrade(unittest.TestCase):
 
         # Test "Buying" actie
         with patch('sys.stdout', new=StringIO()) as fake_out:
-            execute_trade('AAPL', signals_buy)
+            execute_trade('STOXX50', 'NDX', 'BTCUSD', 'UTHUSD', 'EURUSD', 'XAUUSD', signals_buy=signals_buy)
             output = fake_out.getvalue().strip()
-            self.assertEqual(output, 'Buying AAPL.')
+            self.assertEqual(output, 'Buying STOXX50,NDX,BTCUSD,UTHUSD,EURUSD,XAUUSD.')
 
         # Test "Selling" actie
         with patch('sys.stdout', new=StringIO()) as fake_out:
-            execute_trade('AAPL', signals_sell)
+            execute_trade('STOXX50', 'NDX', 'BTCUSD', 'UTHUSD', 'EURUSD', 'XAUUSD', signals_sell=signals_sell)
             output = fake_out.getvalue().strip()
-            self.assertEqual(output, 'Selling AAPL.')
+            self.assertEqual(output, 'Selling STOXX50,NDX,BTCUSD,UTHUSD,EURUSD,XAUUSD.')
 
 if __name__ == '__main__':
     unittest.main()
 
 
-# Hoofdfunctie om geautomatiseerd handelen uit te voeren
+def analyze_trades(symbol, signals):
+    # Tel het aantal koop- en verkoopacties
+    buy_count = np.sum(signals >= 0.5)
+    sell_count = np.sum(signals < 0.5)
+
+    # Print de resultaten
+    print(f"Aantal koopacties voor {symbol}: {buy_count}")
+    print(f"Aantal verkoopacties voor {symbol}: {sell_count}")
+
+# Voer de analyse uit na het uitvoeren van de handel
+analyze_trades(['stoxx50', 'NDX', 'BTCUSD', 'UTHUSD', 'EURUSD', 'XAUUSD'], signals)
+
+# Definieer de analyze_data functie om de gegevens te analyseren
+def analyze_data(data):
+    # Bereken het voortschrijdend gemiddelde (MA) over een bepaalde periode
+    data['MA'] = data['close'].rolling(window=20).mean()  # 20-periode MA
+
+    # Bereken de exponentieel voortschrijdend gemiddelde (EMA) over een bepaalde periode
+    data['EMA'] = data['close'].ewm(span=12, adjust=False).mean()  # 12-periode EMA
+
+    # Bereken de Average True Range (ATR) over een bepaalde periode
+    data['TR'] = data['high'] - data['low']
+    data['TR_mean'] = data['TR'].rolling(window=14).mean()  # 14-periode gemiddelde van TR
+    data['ATR'] = data['TR_mean'].rolling(window=14).mean()  # 14-periode ATR
+
+    # Bereken de Bollinger Bands
+    data['SMA20'] = data['close'].rolling(window=20).mean()
+    data['std_dev'] = data['close'].rolling(window=20).std()
+    data['Upper_Band'] = data['SMA20'] + (data['std_dev'] * 2)
+    data['Lower_Band'] = data['SMA20'] - (data['std_dev'] * 2)
+
+    # Bereken de Stochastic Oscillator
+    data['Lowest_Low'] = data['low'].rolling(window=14).min()
+    data['Highest_High'] = data['high'].rolling(window=14).max()
+    data['%K'] = (data['close'] - data['Lowest_Low']) / (data['Highest_High'] - data['Lowest_Low']) * 100
+    data['%D'] = data['%K'].rolling(window=3).mean()
+
+    # Voeg hier andere indicatoren toe zoals MACD, ATR, enz.
+
+    return data
+
+
+
 async def fetch_data_async(symbol, function, interval='5min', outputsize='full'):
+    # Haal de API-sleutels op uit het CSV-bestand
+    csv_file_path = "D:/vscodedatasets/apisleutelhandel/api_franky/oanda_apisleutel_accound_id.csv"
+    api_keys = get_api_keys_from_csv(csv_file_path)
+
+    # Haal de API-sleutel individueel op
+    api_key = api_keys.get('oanda_api_key', '')
+
+    if not api_key:
+        raise ValueError("API-sleutel niet gevonden in het CSV-bestand")
+
     url = f"https://www.alphavantage.co/query?function={function}&symbol={symbol}&interval={interval}&outputsize={outputsize}&apikey={api_key}"
-    response = await asyncio.get_event_loop().run_in_executor(None, requests.get, url)
-    if response.status_code == 200:
-        data = response.json()
-        if 'Time Series' in data:
-            return symbol, pd.DataFrame(data['Time Series (5min)']).T
-    print("Fout bij het ophalen van gegevens voor:", symbol)
-    return symbol, None
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            if response.status == 200:
+                data = await response.json()
+                if 'Time Series' in data:
+                    return symbol, pd.DataFrame(data['Time Series (5min)']).T
+            print("Fout bij het ophalen van gegevens voor:", symbol)
+            return symbol, None
+
+async def run_auto_trade(symbols):
+    for symbol in symbols:
+        await auto_trade_async(symbol)
+
+async def analyze_data(data):
+    # Voer hier je analyse uit op de gegeven data
+    macd_line, signal_line, macd_histogram = calculate_macd(data)
+    ema = calculate_ema(data)
+    atr = calculate_atr(data)
+    sma, upper_band, lower_band = calculate_bollinger_bands(data)
+    k_percent, d_percent = calculate_stochastic_oscillator(data)
+
+    # Voeg de berekende indicatoren toe aan de DataFrame
+    data['MACD_line'] = macd_line
+    data['MACD_signal_line'] = signal_line
+    data['MACD_histogram'] = macd_histogram
+    data['EMA'] = ema
+    data['ATR'] = atr
+    data['Bollinger_SMA'] = sma
+    data['Bollinger_upper_band'] = upper_band
+    data['Bollinger_lower_band'] = lower_band
+    data['Stochastic_K_percent'] = k_percent
+    data['Stochastic_D_percent'] = d_percent
+
+    return data
 
 # In auto_trade_async functie:
-async def auto_trade_async(symbols):
-    for symbol in symbols:
-        # Haal de gegevens op
-        symbol, data = await fetch_data_async(symbol, 'TIME_SERIES_INTRADAY')
-        if data is not None:
-            # Analyseer de gegevens
-            analyzed_data = analyze_data(data)
-            
-            # Bereid de gegevens voor
-            X, y = prepare_data(analyzed_data)
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=True)
-            
-            # Train het model
-            model = create_model(X_train, y_train)
-            
-            # Genereer signalen
-            signals = generate_signals(analyzed_data, model)
-            
-            # Voer handel uit op basis van signalen
-            execute_trade(symbol, signals)
+async def auto_trade_async(symbol):
+    symbol, data = await fetch_data_async(symbol, 'TIME_SERIES_INTRADAY')
+    if data is not None:
+        analyzed_data = await analyze_data(data)
+        X, y = prepare_data(analyzed_data)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=True)
+        model = create_model(X_train, y_train)
+        signals = generate_signals(analyzed_data, model)
+        execute_trade(symbol, signals)
+
+if __name__ == "__main__":
+    import asyncio
+    symbols = ['STOXX50','ETHUSD','BTCUSD','XAUUSD','NDX','EURUSD']  # Lijst met symbolen om geautomatiseerde handel uit te voeren
+    asyncio.run(run_auto_trade(symbols))        
+
 
 # Definieer de mock_data variabele met voorbeeldgegevens voor elk symbool
 mock_data_stoxx50 = {
@@ -726,14 +1009,58 @@ class TestAutoTradeAsync(unittest.IsolatedAsyncioTestCase):
 if __name__ == '__main__':
     unittest.main()
 
+def calculate_profit_and_loss(data):
+    # Berekenen van P&L
+    data['P&L'] = data['Aantal aandelen'] * (data['Verkoopprijs'] - data['Aankoopprijs'])
+    total_PNL = data['P&L'].sum()
+    return total_PNL
+
+def calculate_sharpe_ratio(data):
+    # Berekenen van gemiddeld rendement en standaarddeviatie
+    average_return = data['Rendement'].mean()
+    volatility = data['Rendement'].std()
+
+    # Risicovrije rente (bijv. 0.02 voor 2%)
+    risk_free_rate = 0.02
+
+    # Berekenen van Sharpe ratio
+    sharpe_ratio = (average_return - risk_free_rate) / volatility
+    return sharpe_ratio
+
+def calculate_max_drawdown(data):
+    # Berekenen van maximale drawdown
+    peak = data['Portefeuillewaarde'].cummax()
+    drawdown = (data['Portefeuillewaarde'] - peak) / peak
+    max_drawdown = drawdown.min()
+    return max_drawdown
+
+def calculate_win_percentage(data):
+    # Berekenen van winstpercentage
+    winning_trades = data[data['P&L'] > 0]
+    win_percentage = (len(winning_trades) / len(data)) * 100
+    return win_percentage
+
+def calculate_average_profit_per_trade(data):
+    # Berekenen van gemiddelde winst per winnende transactie
+    winning_trades = data[data['P&L'] > 0]
+    average_profit_per_trade = winning_trades['P&L'].mean()
+    return average_profit_per_trade
+
+# Voorbeeld van gebruik:
+# result_PNL = calculate_profit_and_loss(data)
+# result_sharpe = calculate_sharpe_ratio(data)
+# result_max_drawdown = calculate_max_drawdown(data)
+# result_win_percentage = calculate_win_percentage(data)
+# result_average_profit_per_trade = calculate_average_profit_per_trade(data)
 # Start geautomatiseerd handelen voor elk opgegeven aandeel
 symbols = ['STOXX50', 'NDX', 'XAUUSD', 'BTCUSD', 'ETHUSD', 'EURUSD']
 iterations = 10
+loop = asyncio.get_event_loop()
 for _ in range(iterations):
-    asyncio.run(auto_trade_async(symbols))
+    loop.run_until_complete(run_auto_trade(symbols))
     time.sleep(86400)  # Wacht 1 dag tussen elke iteratie
+loop.close()
 
-# Na de lus voor geautomatiseerd handelen, voer de volgende stappen uit
 # Voeg de TradingApp-klasse toe met demo-functionaliteit
 class TradingApp:
     DEMO_BALANCE = 50000  # Nep balance voor demo-modus
@@ -785,7 +1112,8 @@ class TradingAppGUI:
         self.master = master
         self.trading_app = trading_app
         master.setWindowTitle("Trading App")
-
+        self.menu_bar= None
+        
         # Frames voor verschillende secties van de GUI
         self.top_frame = QtWidgets.QFrame(master)
         self.top_frame.setLayout(QtWidgets.QHBoxLayout())
@@ -793,24 +1121,55 @@ class TradingAppGUI:
         self.middle_frame.setLayout(QtWidgets.QHBoxLayout())
         self.bottom_frame = QtWidgets.QFrame(master)
         self.bottom_frame.setLayout(QtWidgets.QHBoxLayout())
-
         master.layout = QtWidgets.QVBoxLayout()
         master.layout.addWidget(self.top_frame)
         master.layout.addWidget(self.middle_frame)
         master.layout.addWidget(self.bottom_frame)
-        master.setLayout(master.layout)
-
+        master.setLayout(master.layout)       
+        # Voeg labels toe om feedback aan de gebruiker te geven
+        self.status_label = QtWidgets.QLabel("")
+        self.middle_frame.layout.addWidget(self.status_label)
+        # Voeg sneltoetsen toe voor veelgebruikte functies
+        self.deposit_action = QAction("Storten", self.master)
+        self.deposit_action.triggered.connect(self.deposit_funds)
+        self.deposit_action.setShortcut("Ctrl+S")
+        self.withdraw_action = QAction("Opnemen", self.master)
+        self.withdraw_action.triggered.connect(self.withdraw_funds)
+        self.withdraw_action.setShortcut("Ctrl+W")
+        self.demo_mode_action = QAction("Demo-modus togglen", self.master)
+        self.demo_mode_action.triggered.connect(self.toggle_demo_mode)
+        self.demo_mode_action.setShortcut("Ctrl+D")
+        # Voeg een actie toe voor het helpmenu
+        self.help_action = QAction("Help", self.master)
+        self.help_action.triggered.connect(self.show_help)
+        # Voeg het helpmenu toe aan de menubalk
+        menu_bar = QMenuBar(self.master)
+        self.master.setMenuBar(menu_bar)
+        help_menu = menu_bar.addMenu("Help")
+        help_menu.addAction(self.help_action)
+        # Voeg een lijstwidget toe voor de transactiegeschiedenis
+        self.transaction_history_list = QtWidgets.QListWidget()
+        self.bottom_frame.layout.addWidget(self.transaction_history_list)
+        # Knoppen voor het storten en opnemen van geld
+        self.deposit_button = QtWidgets.QPushButton("Deposit Funds")
+        self.deposit_button.clicked.connect(self.deposit_funds)
+        self.middle_frame.layout.addWidget(self.deposit_button)
+        self.withdraw_button = QtWidgets.QPushButton("Withdraw Funds")
+        self.withdraw_button.clicked.connect(self.withdraw_funds)
+        self.middle_frame.layout.addWidget(self.withdraw_button)
+        # Knop voor het toggelen van demo-modus
+        self.demo_mode_button = QtWidgets.QPushButton("Toggle Demo Mode")
+        self.demo_mode_button.clicked.connect(self.toggle_demo_mode)
+        self.middle_frame.layout.addWidget(self.demo_mode_button)
+        # Knop om gegevens op te halen en grafiek te plotten
+        self.plot_button = QtWidgets.QPushButton("Plot")
+        self.plot_button.clicked.connect(self.plot_data)
+        self.top_frame.layout.addWidget(self.plot_button)
         # Label en invoerveld voor het invoeren van het tickersymbool
         self.symbol_label = QtWidgets.QLabel("Enter Ticker Symbol:")
         self.symbol_entry = QtWidgets.QLineEdit()
         self.top_frame.layout.addWidget(self.symbol_label)
         self.top_frame.layout.addWidget(self.symbol_entry)
-
-        # Knop om gegevens op te halen en grafiek te plotten
-        self.plot_button = QtWidgets.QPushButton("Plot")
-        self.plot_button.clicked.connect(self.plot_data)
-        self.top_frame.layout.addWidget(self.plot_button)
-
         # Dropdownmenu voor het selecteren van de handelsstrategie
         self.strategy_label = QtWidgets.QLabel("Select Trading Strategy:")
         self.strategy_dropdown = QtWidgets.QComboBox()
@@ -818,7 +1177,6 @@ class TradingAppGUI:
         self.strategy_dropdown.setCurrentIndex(0)
         self.middle_frame.layout.addWidget(self.strategy_label)
         self.middle_frame.layout.addWidget(self.strategy_dropdown)
-
         # Canvas voor het plotten van de handelsgrafiek
         self.fig, self.ax = plt.subplots(figsize=(8, 4))
         self.canvas = FigureCanvas(self.fig)
@@ -833,19 +1191,26 @@ class TradingAppGUI:
         self.update_balance()
         self.plot_balance()
 
-        # Knoppen voor het storten en opnemen van geld
-        self.deposit_button = QtWidgets.QPushButton("Deposit Funds")
-        self.deposit_button.clicked.connect(self.deposit_funds)
-        self.middle_frame.layout.addWidget(self.deposit_button)
 
-        self.withdraw_button = QtWidgets.QPushButton("Withdraw Funds")
-        self.withdraw_button.clicked.connect(self.withdraw_funds)
-        self.middle_frame.layout.addWidget(self.withdraw_button)
+    def update_transaction_history(self, transaction):
+        """Voegt een nieuwe transactie toe aan de transactiegeschiedenis."""
+        transaction_time = QDateTime.currentDateTime().toString(Qt.DefaultLocaleLongDate)
+        status = "Succesvol" if transaction["success"] else "Mislukt"
+        transaction_details = f"{transaction_time} - Bedrag: {transaction['amount']}, Status: {status}"
+        self.transaction_history_list.addItem(transaction_details)
+            
+    def show_help(self):
+        # Toon een eenvoudig helpbericht aan de gebruiker
+        QtWidgets.QMessageBox.information(self.master, "Help", "Welkom bij de Trading App!\n\nDit programma stelt gebruikers in staat om handelsgegevens te bekijken, stortingen en opnames te doen, en te schakelen tussen demo- en echte modus.")
+        # self.menu_bar= QMenuBar(self.master)  # Verwijder deze regel
+        # self.master.setMenubar(self.menu_bar)  # Verwijder deze regel
+        # Voeg een menu toe aan de GUI
+        file_menu = self.menu_bar.addMenu("Bestand")  # Gebruik self.menu_bar
+        file_menu.addAction(self.deposit_action)
+        file_menu.addAction(self.withdraw_action)
 
-        # Knop voor het toggelen van demo-modus
-        self.demo_mode_button = QtWidgets.QPushButton("Toggle Demo Mode")
-        self.demo_mode_button.clicked.connect(self.toggle_demo_mode)
-        self.middle_frame.layout.addWidget(self.demo_mode_button)
+        options_menu = self.menu_bar.addMenu("Opties")  # Gebruik self.menu_bar
+        options_menu.addAction(self.demo_mode_action)
 
     def update_balance(self):
         self.trading_balance = np.random.randint(1000, 5000)
@@ -865,6 +1230,9 @@ class TradingAppGUI:
     def plot_data(self):
         # Haal gegevens op van Yahoo Finance
         symbol = self.symbol_entry.text()
+        if not symbol:
+           QtWidgets.QMessageBox.warning(self.master, "Waarschuwing", "Voer alstublieft een ticker-symbool in.")
+           return
         data = yf.download(symbol, start="2023-01-01", end="2024-01-01")
 
         # Voer technische analyse uit met behulp van StochAnalyzer
@@ -880,18 +1248,51 @@ class TradingAppGUI:
         self.ax.legend()
         self.canvas.draw()
 
-    def deposit_funds(self):
-        # Hier kun je code toevoegen om het bedrag op te halen dat de gebruiker wil toevoegen
-        amount = 100  # Dit is een voorbeeldbedrag, vervang dit door het daadwerkelijke bedrag dat de gebruiker invoert
+# Geef feedback met kleuren
+def deposit_funds(self):
+    # Toon een dialoogvenster om de gebruiker het bedrag te laten invoeren
+    amount, ok = QInputDialog.getDouble(self.master, "Storten", "Voer het bedrag in:")
+    if ok:
+        # Voer stortingsactie uit
         self.trading_app.deposit_funds(amount)
+        # Geef feedback aan de gebruiker
+        if self.trading_app.demo_mode:
+            self.status_label.setText(f"Storting van {amount} in demo-modus succesvol uitgevoerd.")
+            self.status_label.setStyleSheet("color: green")  # Groene tekst voor succesvolle acties
+        else:
+            self.status_label.setText(f"Storting van {amount} in real mode succesvol uitgevoerd.")
+            self.status_label.setStyleSheet("color: green")
+    else:
+        # Gebruiker heeft geannuleerd, geef feedback
+        self.status_label.setText("Storten geannuleerd.")
+        self.status_label.setStyleSheet("color: red")  # Rode tekst voor geannuleerde acties
 
-    def withdraw_funds(self):
-        # Hier kun je code toevoegen om het bedrag op te halen dat de gebruiker wil opnemen
-        amount = 100  # Dit is een voorbeeldbedrag, vervang dit door het daadwerkelijke bedrag dat de gebruiker invoert
+def withdraw_funds(self):
+    # Toon een dialoogvenster om de gebruiker het bedrag te laten invoeren
+    amount, ok = QInputDialog.getDouble(self.master, "Opnemen", "Voer het bedrag in:")
+    if ok:
+        # Voer opnameactie uit
         self.trading_app.withdraw_funds(amount)
+        # Geef feedback aan de gebruiker
+        if self.trading_app.demo_mode:
+            self.status_label.setText(f"Opname van {amount} in demo-modus succesvol uitgevoerd.")
+            self.status_label.setStyleSheet("color: green")  # Groene tekst voor succesvolle acties
+        else:
+            self.status_label.setText(f"Opname van {amount} in real mode succesvol uitgevoerd.")
+            self.status_label.setStyleSheet("color: green")
+    else:
+        # Gebruiker heeft geannuleerd, geef feedback
+        self.status_label.setText("Opnemen geannuleerd.")
+        self.status_label.setStyleSheet("color: red")  # Rode tekst voor geannuleerde acties
 
-    def toggle_demo_mode(self):
+
+
+def toggle_demo_mode(self):
+        # Voer actie uit om demo-modus te wijzigen
         self.trading_app.toggle_demo_mode()
+        # Geef feedback aan de gebruiker
+        mode = "ingeschakeld" if self.trading_app.demo_mode else "uitgeschakeld"
+        self.status_label.setText(f"Demo-modus is nu {mode}.")
 
 
 # Functie om het hoofdvenster van de GUI te maken en uit te voeren
