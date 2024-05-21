@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import wikipediaapi
+import multiprocessing
 from sortedcontainers import SortedDict
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
@@ -16,7 +17,21 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QMessageBox
 from PySide6.QtCore import Qt
 
+def parallel_task():
+    # Voer parallelle taak uit
+    print("Parallelle taak wordt uitgevoerd")
 
+    # Maak processen
+    process1 = multiprocessing.Process(target=parallel_task)
+    process2 = multiprocessing.Process(target=parallel_task)
+
+    # Start processen
+    process1.start()
+    process2.start()
+
+    # Wacht op de voltooiing van processen
+    process1.join()
+    process2.join()
 # Laden van het standaardmodel van spaCy voor Nederlands
 nlp = spacy.load("nl_core_news_sm")
 
@@ -198,10 +213,10 @@ class SimpleNN(nn.Module):
         return out
 
 input_size = X_train_standard.shape[1]  # Gebruik de juiste X_train tensor
+print("Shape van X_train_standard:", X_train_standard.shape)
 hidden_size = 11                        # die zijn de verborgen lagen  
 num_classes = len(np.unique(y_train))
 model = SimpleNN(input_size, hidden_size, num_classes)
-
 # Loss en optimizer
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.005)
@@ -212,7 +227,10 @@ for epoch in range(num_epochs):
     for i in range(0, len(X_train_standard_tensor), batch_size):
         X_batch = X_train_standard_tensor[i:i+batch_size]  # Gebruik de juiste X_train tensor
         y_batch = y_train_tensor[i:i+batch_size]  # Gebruik de juiste y_train tensor
-
+        
+        print("Shape van X_batch:", X_batch.shape)
+        print("Shape van y_batch:", y_batch.shape)
+        
         outputs = model(X_batch)
         loss = criterion(outputs, y_batch)
         
@@ -222,6 +240,12 @@ for epoch in range(num_epochs):
     
     if (epoch+1) % 10 == 0:
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
+
+        print("Dimensie van fc1 gewicht:", model.fc1.weight.shape)
+        print("Dimensie van fc2 gewicht:", model.fc2.weight.shape)
+        print("Dimensie van fc3 gewicht:", model.fc3.weight.shape)
+        print("Dimensie van fc4 gewicht:", model.fc4.weight.shape)
+        print("Dimensie van fc5 gewicht:", model.fc5.weight.shape)
 
 ''' hier evalueren we het model op de testset'''
 # Evaluatie van het model op de testset
@@ -244,13 +268,20 @@ def load_model():
 def preprocess_question(question, max_length):
     doc = nlp(question)
     vectors = [token.vector for token in doc]
+    num_features = len(vectors[0])
+    
     if len(vectors) < max_length:
         # Pad the question with zero vectors
-        vectors += [np.zeros_like(vectors[0])] * (max_length - len(vectors))
+        vectors += [np.zeros(num_features)] * (max_length - len(vectors))
     elif len(vectors) > max_length:
         # Truncate the question if it's longer than max_length
         vectors = vectors[:max_length]
+        
+    # Print de lengte van de vectors buiten de if-elif voorwaarden
+    print("Lengte van de vectors:", len(vectors))
+    print("Vorm van de eerste vector:", vectors[0].shape)
     return vectors
+
 
 def ask_question(iris, max_length):  # Voeg max_length als parameter toe
     question = window.question_entry.text()
@@ -262,8 +293,10 @@ def ask_question(iris, max_length):  # Voeg max_length als parameter toe
         QMessageBox.warning(window, "Fout", "Voer een vraag in.")
 
 def get_answer(question, model, iris, max_length):  
-    question_vec = preprocess_question(question, max_length)  
-    question_tensor = torch.tensor([question_vec], dtype=torch.float32)  # Voeg een extra dimensie toe voor de batch
+    question_vec = preprocess_question(question, max_length)
+    question_vec_np = np.array(question_vec)  # Converteer naar NumPy-array
+    print("Vorm van question_vec:", question_vec_np.shape)
+    question_tensor = torch.tensor([question_vec_np], dtype=torch.float32)  # Voeg een extra dimensie toe voor de batch
     outputs = model(question_tensor)
     _, predicted = torch.max(outputs, 1)
     return predicted.item()
