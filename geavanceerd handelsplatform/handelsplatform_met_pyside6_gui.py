@@ -995,8 +995,6 @@ for threshold in np.arange(0.3, 0.8, 0.1):  # Van 0.3 tot 0.7 met stapgrootte 0.
     print(f"Analyse met drempel {threshold}:")
     analyze_signals(data, signals, threshold=threshold)
 
-
-
 # Functie om handel uit te voeren op basis van signalen
 def execute_trade(*symbols, signals, threshold=0.5):
     """
@@ -1033,7 +1031,7 @@ if __name__ == '__main__':
     unittest.main()
 
 
-
+# analyseren van signalen en drempelwaarden
 def analyze_trades(symbols, signals, threshold=0.5):
     """
     Analyseer het aantal koop- en verkoopacties voor de gegeven symbolen en signalen.
@@ -1181,9 +1179,6 @@ for data in all_symbol_data:
     if df is not None:
         print(f"Data voor {symbol}:\n", df.head())
 
-async def run_auto_trade(symbols):
-    for symbol in symbols:
-        await auto_trade_async(symbol)
 
 async def analyze_data(data):
     # Voer hier je analyse uit op de gegeven data
@@ -1208,7 +1203,8 @@ async def analyze_data(data):
     data['RSI]'] = rsi
 
     return data
-
+async def run_auto_trade(symbols, threshold=0.5):
+    await auto_trade_async(symbols, threshold)
 # In auto_trade_async functie:
 async def auto_trade_async(symbols, threshold=0.5):
     for symbol in symbols:
@@ -1226,7 +1222,7 @@ if __name__ == "__main__":
     symbols = ['STOXX50', 'ETHUSD', 'BTCUSD', 'XAUUSD', 'NDX', 'EURUSD', 'N100', 'NVDA', 'TSLA']  # Lijst met symbolen om geautomatiseerde handel uit te voeren
     threshold = 0.5  # Stel de threshold in
     asyncio.run(auto_trade_async(symbols, threshold))
- 
+
 # Simuleer analyzed_data met voorbeeldgegevens
 analyzed_data = {
     'Close': np.random.rand(100),  # Willekeurige voorbeeldgegevens voor 'Close' prijzen
@@ -1716,11 +1712,15 @@ def calculate_average_profit_per_trade(data):
 # Start geautomatiseerd handelen voor elk opgegeven aandeel
 symbols = ['STOXX50', 'NDX', 'XAUUSD', 'BTCUSD', 'ETHUSD', 'EURUSD','N100','NVDA','TSLA']
 iterations = 10
+threshold = threshold
+
 loop = asyncio.get_event_loop()
-for _ in range(iterations):
-    loop.run_until_complete(run_auto_trade(symbols))
-    time.sleep(86400)  # Wacht 1 dag tussen elke iteratie
-loop.close()
+try:
+    for _ in range(iterations):
+        loop.run_until_complete(run_auto_trade(symbols, threshold=threshold))
+        time.sleep(86400)  # Wacht 1 dag tussen elke iteratie
+finally:
+    loop.close()
 
 # Voeg de TradingApp-klasse toe met demo-functionaliteit
 class TradingApp:
@@ -1784,16 +1784,12 @@ class TradingApp:
     def stop_autotrading(self):
      self.trading_app.stop_autotrading()
     
-
-
-
-
 # dit is een gui met pyside6
 class TradingAppGUI:
     def __init__(self, master, trading_app):
         self.master = master
         self.trading_app = trading_app
-        master.setWindowTitle("Trading App")
+        master.setWindowTitle("geavanceerd handelsplatform")
         self.menu_bar= None
         
         # Voeg knoppen toe voor het selecteren van risiconiveaus
@@ -1919,16 +1915,6 @@ class TradingAppGUI:
         self.available_balance_label = QtWidgets.QLabel("Available Balance: " + str(self.available_balance))
         self.total_balance_label = QtWidgets.QLabel("Total Balance: " + str(self.total_balance))
 
-        # Stel labels in voor balansinformatie
-        self.trading_balance_label = QtWidgets.QLabel("Trading Balance: " + str(self.trading_balance))
-        self.available_balance_label = QtWidgets.QLabel("Available Balance: " + str(self.available_balance))
-        self.total_balance_label = QtWidgets.QLabel("Total Balance: " + str(self.total_balance))
-
-        # Pas de achtergrondkleur van de labels aan
-        self.trading_balance_label.setStyleSheet("background-color: lightblue;")
-        self.available_balance_label.setStyleSheet("background-color: lightgreen;")
-        self.total_balance_label.setStyleSheet("background-color: lightyellow;")
-
         # Voeg labels toe aan het bovenste frame
         self.top_frame.layout.addWidget(self.trading_balance_label)
         self.top_frame.layout.addWidget(self.available_balance_label)
@@ -1975,7 +1961,7 @@ class TradingAppGUI:
             
     def show_help(self):
         # Toon een eenvoudig helpbericht aan de gebruiker
-        QtWidgets.QMessageBox.information(self.master, "Help", "Welkom bij de Trading App!\n\nDit programma stelt gebruikers in staat om handelsgegevens te bekijken, stortingen en opnames te doen, en te schakelen tussen demo- en echte modus.")
+        QtWidgets.QMessageBox.information(self.master, "Help", "Welkom bij het geavanceerd handelsplatform!\n\nDit programma stelt gebruikers in staat om handelsgegevens te bekijken, stortingen en opnames te doen, en te schakelen tussen demo- en echte modus.")
         self.menu_bar= QMenuBar(self.master)  
         self.master.setMenubar(self.menu_bar)  
         # Voeg een menu toe aan de GUI
